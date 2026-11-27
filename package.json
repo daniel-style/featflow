@@ -1,6 +1,6 @@
 {
   "name": "featflow",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "AI-native feature workflow: Skill + CLI + Git/Agent Hooks for discovery-first planning, Git worktree isolation, and safe branch lifecycles.",
   "type": "module",
   "license": "MIT",
@@ -49,7 +49,7 @@
     "LICENSE"
   ],
   "scripts": {
-    "test": "node --test test/*.test.mjs",
+    "test": "node --test",
     "smoke": "node bin/featflow.mjs --help"
   }
 }
