@@ -93,6 +93,7 @@ main (release, protected)
 | Command | Description |
 | --- | --- |
 | `featflow init [options]` | Scaffold `.featflow.json`, `features/` templates, `.agents/skills/featflow/SKILL.md`, optional `.githooks/`, and optional Codex / Claude Code hooks. |
+| `featflow sync [options]` | Sync managed Skill, feature templates, and `.githooks/` from the installed `featflow` version without modifying `.featflow.json` or feature records. Pass `--check` in CI to fail on drift, or `--only skill,templates,githooks`. |
 | `featflow setup [dev-branch]` | Configure personal developer branch (in `developer-branch` mode) and safely enable Git hooks without clobbering Husky/Lefthook. |
 | `featflow status` | Inspect workflow mode, branch/remote status, all worktrees, active/paused feature records, and next recommended step. |
 | `featflow worktree <branch> [path] [base]` | Create a typed task branch in a dedicated sibling worktree and run configured `postWorktreeCreate` commands. |
@@ -145,6 +146,7 @@ main (release, protected)
 - **Tracked vs. Local-only `features/`**: Prefer keeping AI planning records out of Git history? Pass `featflow init --local-features` to ignore `features/` while keeping the full Skill, CLI, and plan-gate workflow locally.
 - **Smart `PreToolUse` plan gating**: Unlike naive keyword regexes, `featflow hook` distinguishes read-only shell commands (`rg`, `cat`, `git diff`) from mutating writes, strips Markdown code spans/fences before checking template placeholders, and checks that `Pre-Implementation Approval` is no longer `pending`.
 - **Optional post-worktree hooks**: Need automatic dependency install (`pnpm install --frozen-lockfile --offline`) or local index bootstrap (`codegraph init`) when creating a worktree? Add them to `postWorktreeCreate` in `.featflow.json`.
+- **Multi-repository sync without drift**: Upgrade `featflow` in any project and run `featflow sync` to refresh the managed Skill, templates, and `.githooks/` while keeping `.featflow.json` and active/done records untouched. Add `featflow sync --check` to CI so repositories stay aligned with their pinned `featflow` version.
 
 ---
 

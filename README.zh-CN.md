@@ -93,6 +93,7 @@ main (发布分支，受保护)
 | 命令 | 说明 |
 | --- | --- |
 | `featflow init` | 生成 `.featflow.json`、`features/` 模板、`.agents/skills/featflow/SKILL.md` 及可选 Git/Agent Hooks。 |
+| `featflow sync` | 从当前安装的 `featflow` 同步更新 Skill、模板与 `.githooks/`，不改动 `.featflow.json` 与已有记录。支持 `--check` 放进 CI 防漂移、`--only skill,templates,githooks` 按需同步。 |
 | `featflow setup [branch]` | 初始化个人开发分支（`developer-branch` 模式）并安全配置 Git hooks。 |
 | `featflow status` | 查看当前模式、分支状态、所有 worktree、进行中/暂停中的 feature 记录和下一步建议。 |
 | `featflow worktree <branch>` | 为任务分支创建独立 worktree，并自动执行 `.featflow.json` 中配置的 `postWorktreeCreate` 命令。 |
@@ -113,6 +114,7 @@ main (发布分支，受保护)
 - **支持记录不入库（本地模式）**：不希望把 AI 规划文档提交进 Git 历史？运行 `featflow init --local-features` 即可将 `features/` 写入 `.gitignore`，同时保留完整的规划校验与 worktree 自动化。
 - **更精准的 `PreToolUse` 校验**：区分只读命令（`rg`、`cat`、`git diff`）与真实写操作，检测占位符前自动剥离 Markdown 代码块与行内代码避免误拦，且校验 `Pre-Implementation Approval` 非 `pending`。
 - **可扩展的 `postWorktreeCreate` 钩子**：需要在建完 worktree 后自动装依赖（如 `pnpm install --frozen-lockfile --offline`）或构建索引（如 `codegraph init`），直接配置到 `.featflow.json` 的 `postWorktreeCreate` 数组即可。
+- **多仓库一键同步防漂移**：在业务仓库升级 `featflow` 后运行 `featflow sync` 即可同步最新 Skill、模板与 `.githooks/`，不会覆盖项目自身的 `.featflow.json`；把 `featflow sync --check` 放进 CI 可自动防止文档/模板与 CLI 版本脱节。
 
 ---
 

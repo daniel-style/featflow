@@ -14,6 +14,7 @@ import { runPolicy } from "../src/commands/policy-cmd.mjs";
 import { runPrCleanup } from "../src/commands/pr-cleanup.mjs";
 import { runSetup } from "../src/commands/setup.mjs";
 import { runStatus } from "../src/commands/status.mjs";
+import { runSync } from "../src/commands/sync.mjs";
 import { runWorktree } from "../src/commands/worktree.mjs";
 
 const pkg = JSON.parse(readFileSync(path.join(packageRoot, "package.json"), "utf8"));
@@ -26,6 +27,7 @@ Usage:
 
 Commands:
   init          Scaffold .featflow.json, feature templates, skill, and optional hooks
+  sync          Sync managed Skill, templates, and .githooks from installed featflow (--check for CI)
   setup         Configure developer branch (if applicable) and safely enable Git hooks
   status        Show workflow mode, branch/worktree state, active features, and next step
   worktree      Create a typed task branch in a dedicated Git worktree
@@ -46,6 +48,7 @@ Run "featflow <command> --help" for command-specific options.
 
 const commands = {
   init: runInit,
+  sync: runSync,
   setup: runSetup,
   status: runStatus,
   worktree: runWorktree,

@@ -4,6 +4,7 @@ import path from "node:path";
 import { loadConfig } from "../config.mjs";
 import { commandExists, findRepoRoot, gitConfigGet, localBranchExists } from "../git.mjs";
 import { validateActiveFeaturePlan } from "../plan.mjs";
+import { inspectSyncState } from "./sync.mjs";
 
 const usage = `
 Usage:
@@ -61,6 +62,21 @@ export async function runDoctor(argv) {
     "Agent Skill",
     existsSync(skillPath) ? ".agents/skills/featflow/SKILL.md" : "not installed in repo (run `featflow init` or `npx skills add`)",
   );
+
+  const syncGroups = new Set(["skill", "templates"]);
+  if (existsSync(path.join(repoRoot, ".githooks"))) {
+    syncGroups.add("githooks");
+  }
+  const syncState = inspectSyncState(repoRoot, config, syncGroups);
+  if (syncState.ok) {
+    add("PASS", "Managed files sync", `${syncState.upToDate.length} files match installed featflow`);
+  } else {
+    const issues = [
+      ...syncState.missing.map((item) => `missing ${item.rel}`),
+      ...syncState.drifted.map((item) => `drifted ${item.rel}`),
+    ];
+    add("WARN", "Managed files sync", `${issues.join(", ")} (run \`featflow sync\`)`);
+  }
 
   const hooksPath = gitConfigGet("core.hooksPath", repoRoot);
   if (hooksPath === ".githooks") {
