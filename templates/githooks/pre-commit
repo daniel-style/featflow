@@ -1,0 +1,11 @@
+#!/usr/bin/env sh
+set -e
+
+if [ -x "./node_modules/.bin/featflow" ]; then
+  exec ./node_modules/.bin/featflow policy pre-commit
+elif command -v featflow >/dev/null 2>&1; then
+  exec featflow policy pre-commit
+else
+  echo "featflow: CLI not found in ./node_modules/.bin or PATH; skipping pre-commit check." >&2
+  echo "Install featflow or set FEATFLOW_BOOTSTRAP=1 to silence this notice." >&2
+fi

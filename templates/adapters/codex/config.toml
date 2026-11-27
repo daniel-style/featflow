@@ -1,0 +1,15 @@
+# featflow hooks adapter for OpenAI Codex (.codex/config.toml)
+# Requires `featflow` on PATH (or replace `featflow` with `npx --no-install featflow`).
+
+[hooks]
+userPromptSubmit = [
+  { command = "featflow hook codex user-prompt", timeoutSec = 5, statusMessage = "Checking featflow workflow routing" },
+]
+
+preToolUse = [
+  { command = "featflow hook codex pre-tool-use", timeoutSec = 5, statusMessage = "Checking featflow branch and plan policy" },
+]
+
+stop = [
+  { command = "featflow hook codex stop", timeoutSec = 8, statusMessage = "Checking featflow verification reminders" },
+]

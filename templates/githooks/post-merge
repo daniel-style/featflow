@@ -1,0 +1,7 @@
+#!/usr/bin/env sh
+
+if [ -x "./node_modules/.bin/featflow" ]; then
+  ./node_modules/.bin/featflow cleanup --post-merge || true
+elif command -v featflow >/dev/null 2>&1; then
+  featflow cleanup --post-merge || true
+fi

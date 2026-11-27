@@ -1,0 +1,55 @@
+{
+  "name": "featflow",
+  "version": "0.1.0",
+  "description": "AI-native feature workflow: Skill + CLI + Git/Agent Hooks for discovery-first planning, Git worktree isolation, and safe branch lifecycles.",
+  "type": "module",
+  "license": "MIT",
+  "author": "Daniel",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/daniel-style/featflow.git"
+  },
+  "homepage": "https://github.com/daniel-style/featflow#readme",
+  "bugs": {
+    "url": "https://github.com/daniel-style/featflow/issues"
+  },
+  "keywords": [
+    "ai-agent",
+    "agent-skills",
+    "workflow",
+    "git-worktree",
+    "feature-planning",
+    "codex",
+    "claude-code",
+    "cursor",
+    "cli",
+    "hooks"
+  ],
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "bin": {
+    "featflow": "./bin/featflow.mjs"
+  },
+  "exports": {
+    ".": "./src/index.mjs",
+    "./config": "./src/config.mjs",
+    "./git": "./src/git.mjs",
+    "./plan": "./src/plan.mjs",
+    "./policy": "./src/policy.mjs",
+    "./hooks": "./src/hooks-core.mjs"
+  },
+  "files": [
+    "bin/",
+    "src/",
+    "skills/",
+    "templates/",
+    "README.md",
+    "README.zh-CN.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "smoke": "node bin/featflow.mjs --help"
+  }
+}

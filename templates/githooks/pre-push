@@ -1,0 +1,10 @@
+#!/usr/bin/env sh
+set -e
+
+if [ -x "./node_modules/.bin/featflow" ]; then
+  exec ./node_modules/.bin/featflow policy pre-push
+elif command -v featflow >/dev/null 2>&1; then
+  exec featflow policy pre-push
+else
+  echo "featflow: CLI not found in ./node_modules/.bin or PATH; skipping pre-push check." >&2
+fi
