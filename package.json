@@ -1,6 +1,6 @@
 {
   "name": "featflow",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "AI-native feature workflow: Skill + CLI + Git/Agent Hooks for discovery-first planning, Git worktree isolation, and safe branch lifecycles.",
   "type": "module",
   "license": "MIT",

@@ -92,14 +92,31 @@ export function commandExists(command, args = ["--version"]) {
 
 export function canonicalPath(targetPath) {
   const resolved = path.resolve(targetPath);
+  const nativeRealpath = realpathSync.native ?? realpathSync;
   if (existsSync(resolved)) {
     try {
-      return realpathSync(resolved);
+      return nativeRealpath(resolved);
     } catch {
       return resolved;
     }
   }
-  return resolved;
+  const tail = [];
+  let cursor = resolved;
+  while (true) {
+    const parent = path.dirname(cursor);
+    if (parent === cursor) {
+      return resolved;
+    }
+    tail.unshift(path.basename(cursor));
+    cursor = parent;
+    if (existsSync(cursor)) {
+      try {
+        return path.join(nativeRealpath(cursor), ...tail);
+      } catch {
+        return resolved;
+      }
+    }
+  }
 }
 
 export function samePath(left, right) {
