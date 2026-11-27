@@ -134,4 +134,29 @@ describe("feature plan validator", () => {
       rmSync(repo, { force: true, recursive: true });
     }
   });
+
+  it("treats blank active_feature in current-feature.md as idle instead of reading the next frontmatter line", () => {
+    const repo = mkdtempSync(path.join(tmpdir(), "featflow-plan-idle-"));
+    try {
+      mkdirSync(path.join(repo, "features"), { recursive: true });
+      writeFileSync(
+        path.join(repo, "features", "current-feature.md"),
+        [
+          "---",
+          "status: none",
+          "updated: 2026-11-28T02:08:00+08:00",
+          "active_feature:",
+          "last_completed: done/2026-11-28-0203-example.md",
+          "---",
+        ].join("\n"),
+      );
+
+      const res = validateActiveFeaturePlan(repo);
+      assert.equal(res.ok, true);
+      assert.equal(res.skipped, true);
+      assert.equal(res.activeFeature, null);
+    } finally {
+      rmSync(repo, { force: true, recursive: true });
+    }
+  });
 });

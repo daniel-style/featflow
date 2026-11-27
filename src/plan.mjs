@@ -83,10 +83,10 @@ export function resolveActiveFeaturePath(repoRoot, featuresDir = "features") {
   const pointerPath = path.resolve(repoRoot, featuresDir, "current-feature.md");
   if (existsSync(pointerPath)) {
     const pointer = readFileSync(pointerPath, "utf8");
-    const match = pointer.match(/^active_feature:\s*(.+)$/m);
-    if (match && match[1].trim()) {
-      const rel = match[1].trim();
-      return rel.startsWith(`${featuresDir}/`) ? rel : `${featuresDir}/${rel}`;
+    const match = pointer.match(/^active_feature:[ \t]*([^\r\n]*)$/m);
+    const rawValue = match ? match[1].trim() : "";
+    if (rawValue) {
+      return rawValue.startsWith(`${featuresDir}/`) ? rawValue : `${featuresDir}/${rawValue}`;
     }
   }
 
