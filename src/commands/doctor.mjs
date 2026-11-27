@@ -1,8 +1,8 @@
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 import { loadConfig } from "../config.mjs";
-import { commandExists, findRepoRoot, gitConfigGet, localBranchExists } from "../git.mjs";
+import { commandExists, findGitCommonDir, findRepoRoot, gitConfigGet, localBranchExists } from "../git.mjs";
 import { validateActiveFeaturePlan } from "../plan.mjs";
 import { inspectSyncState } from "./sync.mjs";
 
@@ -79,12 +79,17 @@ export async function runDoctor(argv) {
   }
 
   const hooksPath = gitConfigGet("core.hooksPath", repoRoot);
+  const commonDir = findGitCommonDir(repoRoot);
+  const localPreCommit = commonDir ? path.join(commonDir, "hooks", "pre-commit") : "";
+  const hasLocalHook = Boolean(localPreCommit && existsSync(localPreCommit) && readFileSync(localPreCommit, "utf8").includes("featflow managed hook"));
   if (hooksPath === ".githooks") {
     add("PASS", "Git hooks", "core.hooksPath=.githooks");
   } else if (hooksPath) {
     add("INFO", "Git hooks", `external hooks manager detected (core.hooksPath=${hooksPath})`);
+  } else if (hasLocalHook) {
+    add("PASS", "Git hooks", "local .git/hooks managed blocks installed");
   } else {
-    add("INFO", "Git hooks", "not configured (run `featflow init --with-githooks` or wire into Husky/Lefthook)");
+    add("INFO", "Git hooks", "not configured (run `featflow hooks install --local` or `featflow init --with-githooks`)");
   }
 
   if (config.mode === "developer-branch") {

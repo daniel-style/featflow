@@ -16,37 +16,56 @@
 
 ---
 
-## 三层渐进式接入
+## 灵活接入（推荐全局安装，按项目按需选档）
 
-按团队需要按需开启，不强制一步到位：
+**不需要每个项目都内置依赖或拷模板！** 本机全局安装一次后，每个仓库可以按实际情况选择侵入程度：
 
-| 层级 | 包含内容 | 适用场景 | 接入成本 |
-| --- | --- | --- | --- |
-| **Tier 1：纯 Skill + 模板** | `skills/featflow/SKILL.md` + `features/_template.md` | 快速建立“先探索 -> 出计划 -> 等确认 -> 记录交接”的协作规范 | ~1 分钟 |
-| **Tier 2：CLI + Git Hooks** | `featflow init / worktree / finish / cleanup / pr-cleanup` + `.githooks/` | 多 worktree 并行开发、合并后自动清理、保护分支防呆 | ~3 分钟 |
-| **Tier 3：Agent Hooks 硬门禁** | `featflow hook <codex\|claude-code> ...` | 在工具调用层拦截“计划未填完/未审批就改源码”与高危命令 | ~5 分钟 |
+| 模式 | 目标仓库改动 | 适用场景 |
+| --- | --- | --- |
+| **1. 纯全局零入侵（推荐）** | **0 个文件**（`featflow new --local` 用内置模板写到 `.featflow/features/` 并写入 `.git/info/exclude`；`featflow hooks install --local` 装在 `.git/hooks/`） | 个人项目、Python/Go/Rust 等非 JS 项目、给外部开源项目提 PR |
+| **2. 全局 CLI + 仅 1 份配置** | **仅 1 个 `.featflow.json`**（不动 `package.json`、锁文件与 CI） | 多仓库开发者，或约定开发机统一装 CLI 的团队（类似 `gh` / `codegraph`） |
+| **3. 团队项目内置（`devDependency`）** | `package.json` + `.featflow.json` + 同步的 Skill/模板/`.githooks/` + CI `featflow sync --check` | 多人协作 JS/TS 仓库，希望新人 `pnpm install` 零额外步骤且 CI 强锁版本 |
 
 ---
 
 ## 快速开始
 
-### 方式 A：只安装 Agent Skill（Tier 1）
+### 方式 A：全局安装（推荐，跨所有项目与语言通用）
 
 ```bash
-npx skills add https://github.com/daniel-style/featflow --skill featflow
+# 1. 本机全局安装一次 CLI
+npm install -g github:daniel-style/featflow#v0.2.0
+
+# 2. 本机全局安装一次 Agent Skill（Codex / Claude Code / Cursor / Antigravity 自动识别）
+npx skills add https://github.com/daniel-style/featflow --skill featflow -g
 ```
 
-### 方式 B：完整接入 Skill + CLI + Hooks（Tier 2 & 3）
+在**任意** Git 仓库里立即可用（0 文件入侵）：
 
 ```bash
-# 在项目中安装（或 npm i -g 全局安装）
-npm install -D github:daniel-style/featflow
+# 可选：在 .git/hooks/ 启用本地保护分支与自动清理钩子（不改仓库任何 tracked 文件）
+featflow hooks install --local
 
-# 初始化（默认 trunk 模式，适合个人/小团队/开源项目）
+# 创建隔离任务 worktree
+featflow worktree feat/oauth-pkce
+
+# 用内置模板生成 feature 计划记录（--local 存本地并自动写入 .git/info/exclude）
+cd ../my-repo-worktrees/feat-oauth-pkce
+featflow new oauth-pkce --local
+
+# 验证并 commit 后，一键合并收尾并清理 worktree
+featflow finish feat/oauth-pkce
+```
+
+若某个项目需要 `developer-branch` 模式或自定义 `postWorktreeCreate` 钩子，只需在项目根目录放一个 `.featflow.json`，无需动 `package.json` 或 CI。
+
+### 方式 B：多人 JS/TS 项目内置锁定版本
+
+```bash
+npm install -D github:daniel-style/featflow#v0.2.0
+
+# 初始化（默认 trunk 模式；团队分支模式加 --mode developer-branch）
 npx featflow init --with-githooks
-
-# 或初始化为团队个人开发分支模式（main <- dev <- <dev> <- <prefix>/<dev>-<task>）
-npx featflow init --mode developer-branch --with-githooks
 
 # 可选：同时生成 Codex 或 Claude Code 的 Agent Hooks 配置
 npx featflow init --with-codex-hooks --with-claude-hooks
@@ -92,6 +111,8 @@ main (发布分支，受保护)
 
 | 命令 | 说明 |
 | --- | --- |
+| `featflow new <slug>` | 使用项目模板或 `featflow` 内置模板新建 feature（或 `--program`）记录，自动填入时间戳、`owner` 与分支；加 `--local` 存到 `.featflow/features/` 并写入 `.git/info/exclude` 实现零入侵。 |
+| `featflow hooks <install\|uninstall\|status>` | 管理 Git hooks：`--local`（默认）在 `.git/hooks/` 中无损增删托管块，保留已有自定义 hook 且不改仓库文件；`--repo` 生成入库的 `.githooks/`。 |
 | `featflow init` | 生成 `.featflow.json`、`features/` 模板、`.agents/skills/featflow/SKILL.md` 及可选 Git/Agent Hooks。 |
 | `featflow sync` | 从当前安装的 `featflow` 同步更新 Skill、模板与 `.githooks/`，不改动 `.featflow.json` 与已有记录。支持 `--check` 放进 CI 防漂移、`--only skill,templates,githooks` 按需同步。 |
 | `featflow setup [branch]` | 初始化个人开发分支（`developer-branch` 模式）并安全配置 Git hooks。 |

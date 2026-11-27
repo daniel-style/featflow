@@ -8,7 +8,9 @@ import { runCleanup } from "../src/commands/cleanup.mjs";
 import { runDoctor } from "../src/commands/doctor.mjs";
 import { runFinish } from "../src/commands/finish.mjs";
 import { runHook } from "../src/commands/hook-cmd.mjs";
+import { runHooks } from "../src/commands/hooks-cmd.mjs";
 import { runInit } from "../src/commands/init.mjs";
+import { runNew } from "../src/commands/new.mjs";
 import { runPlanCheck } from "../src/commands/plan-check.mjs";
 import { runPolicy } from "../src/commands/policy-cmd.mjs";
 import { runPrCleanup } from "../src/commands/pr-cleanup.mjs";
@@ -26,6 +28,8 @@ Usage:
   featflow <command> [options]
 
 Commands:
+  new           Create a feature or program record from repo or built-in template (--local for zero-footprint)
+  hooks         Install/uninstall/inspect Git hooks (--local into .git/hooks/ or --repo into .githooks/)
   init          Scaffold .featflow.json, feature templates, skill, and optional hooks
   sync          Sync managed Skill, templates, and .githooks from installed featflow (--check for CI)
   setup         Configure developer branch (if applicable) and safely enable Git hooks
@@ -47,6 +51,8 @@ Run "featflow <command> --help" for command-specific options.
 `.trim();
 
 const commands = {
+  new: runNew,
+  hooks: runHooks,
   init: runInit,
   sync: runSync,
   setup: runSetup,

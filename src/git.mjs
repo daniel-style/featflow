@@ -143,13 +143,22 @@ export function findRepoRoot(startCwd = process.cwd()) {
   return canonicalPath(result.stdout);
 }
 
-export function findMainRepoRoot(startCwd = process.cwd()) {
+export function findGitCommonDir(startCwd = process.cwd()) {
   const commonDirResult = runReadSoft("git", ["rev-parse", "--path-format=absolute", "--git-common-dir"], startCwd);
   if (commonDirResult.status === 0 && commonDirResult.stdout) {
-    const commonDir = canonicalPath(commonDirResult.stdout);
-    if (path.basename(commonDir) === ".git") {
-      return path.dirname(commonDir);
-    }
+    return canonicalPath(commonDirResult.stdout);
+  }
+  const fallback = runReadSoft("git", ["rev-parse", "--git-common-dir"], startCwd);
+  if (fallback.status === 0 && fallback.stdout) {
+    return canonicalPath(path.resolve(startCwd, fallback.stdout));
+  }
+  return null;
+}
+
+export function findMainRepoRoot(startCwd = process.cwd()) {
+  const commonDir = findGitCommonDir(startCwd);
+  if (commonDir && path.basename(commonDir) === ".git") {
+    return path.dirname(commonDir);
   }
   return findRepoRoot(startCwd);
 }

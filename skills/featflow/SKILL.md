@@ -9,14 +9,16 @@ Use this skill from the active repository checkout or task worktree root. It kee
 
 ## Core Files
 
-- `.featflow.json` (optional): repository configuration (branch mode, protected branches, worktree parent, product paths, post-create hooks, verification hints).
-- `features/_template.md`: template for new feature records.
-- `features/_program_template.md`: template for multi-phase program roadmaps.
-- `features/active/`: feature records currently being implemented.
-- `features/done/`: completed feature records.
-- `features/paused/`: parked feature records ready to resume later.
-- `features/programs/`: long-running program records linking multiple feature phases.
-- `features/current-feature.md` (optional local pointer): short summary of the active worktree's current feature. In parallel worktree setups, treat `features/active/` as the canonical list rather than a single shared pointer file.
+`featflow` works in **three flexible modes** — from zero-footprint global usage (0 tracked repo files) to full repo-tracked team workflows:
+
+- `.featflow.json` (optional): repository configuration (branch mode, protected branches, worktree parent, product paths, post-create hooks, verification hints). When absent, `featflow` defaults to `trunk` mode (`main`).
+- `features/` (repo-tracked) **or** `.featflow/features/` (local zero-footprint via `featflow new --local`, excluded in `.git/info/exclude`):
+  - `active/`: feature records currently being implemented.
+  - `done/`: completed feature records.
+  - `paused/`: parked feature records ready to resume later.
+  - `programs/`: long-running program records linking multiple feature phases.
+  - `_template.md` / `_program_template.md` (optional in repo): `featflow new` automatically uses the repo template when present and falls back to its built-in template otherwise.
+- `features/current-feature.md` (optional local pointer): short summary of the active worktree's current feature. In parallel worktree setups, treat `active/` as the canonical list rather than a single shared pointer file.
 
 ## Core Principles
 
@@ -84,10 +86,10 @@ Use a program record (`features/programs/YYYY-MM-DD-short-kebab-program.md` from
    - Run `featflow worktree <branch> ../<repo>-worktrees/<feature-id>` (or `git worktree add -b <branch> ...` if CLI is not installed).
    - If the task is a tiny tracked doc/config change and using a worktree adds unnecessary friction, record the no-worktree exception in `Branch Plan`.
 7. **Draft the canonical feature record inside the task worktree**:
-   - Create `features/active/<feature-id>.md` from `features/_template.md`.
-   - Resolve `owner` dynamically via `git config --get user.name` (fallback: `Unknown`). Never hardcode a personal name.
+   - Prefer `featflow new <short-kebab-title>` (automatically resolves `owner` from `git config user.name`, local ISO 8601 timestamp, branch, and built-in or repo template).
+   - If the repository does not track `features/` in Git (zero-footprint / external OSS repo), use `featflow new <short-kebab-title> --local` to store the record under `.featflow/features/active/` (excluded via `.git/info/exclude` with zero `git status` noise).
+   - If the CLI is unavailable, copy `features/_template.md` into `features/active/<feature-id>.md` and resolve `owner` via `git config --get user.name` (fallback: `Unknown`).
    - Fill every `Feature Brief` and `Plan Details` subsection concretely, including `Pre-Implementation Approval`. Use `None - <reason>` for non-applicable subsections and `Unknown - <discovery plan>` for non-blocking unknowns.
-   - Optionally update local `features/current-feature.md` if used by the repository.
    - Run `featflow plan-check` to confirm completeness.
 8. **Implement inside the task worktree**.
 

@@ -16,37 +16,56 @@ Zero runtime dependencies. Pure Node.js ESM (`>=20`). Cross-platform (macOS, Lin
 
 ---
 
-## Progressive Adoption (3 Tiers)
+## Flexible Adoption (Global-First or Repo-Embedded)
 
-Adopt only the layers your team needs:
+Install `featflow` **once globally** and adapt its footprint per repository — no need to add dependencies or boilerplate to every project:
 
-| Tier | What you use | Best for | Setup time |
-| --- | --- | --- | --- |
-| **Tier 1: Skill + Templates** | `skills/featflow/SKILL.md` + `features/_template.md` | Immediate discovery -> plan -> approval discipline with any AI agent | ~1 min |
-| **Tier 2: CLI + Git Hooks** | `featflow init`, `worktree`, `finish`, `cleanup`, `pr-cleanup`, `.githooks/` | Parallel worktrees, automatic cleanup, protected-branch guardrails | ~3 min |
-| **Tier 3: Agent Hooks** | `featflow hook <codex\|claude-code> ...` | Hard enforcement blocking product-code edits when `Plan Details` are incomplete or unapproved | ~5 min |
+| Mode | Footprint in target repo | Best for |
+| --- | --- | --- |
+| **1. Zero-Footprint Global (Recommended)** | **0 files** (uses built-in templates via `featflow new --local` and `.git/hooks/` via `featflow hooks install --local`) | Personal repos, Python/Go/Rust repos, contributing to external OSS repos without touching tracked files |
+| **2. Lightweight Global + Config** | **1 file** (`.featflow.json` only — no `package.json`, lockfile, or CI changes) | Multi-repo developers and teams who install `featflow` once on dev machines (like `gh` or `codegraph`) |
+| **3. Team Embedded (`devDependency`)** | `package.json` + `.featflow.json` + synced Skill/templates/`.githooks/` + CI `featflow sync --check` | Large JS/TS teams requiring identical locked versions across all contributors and CI |
 
 ---
 
 ## Quick Start
 
-### Option A — Install as an Agent Skill only (Tier 1)
+### Option A — Global Install (Recommended, works across all repos & languages)
 
 ```bash
-npx skills add https://github.com/daniel-style/featflow --skill featflow
+# 1. Install the CLI globally once
+npm install -g github:daniel-style/featflow#v0.2.0
+
+# 2. Install the Agent Skill globally once (Codex, Claude Code, Cursor, Antigravity)
+npx skills add https://github.com/daniel-style/featflow --skill featflow -g
 ```
 
-### Option B — Full Skill + CLI + Hooks (Tier 2 & 3)
+Use immediately inside **any** Git repository (zero repo files modified):
 
 ```bash
-# Install locally (or globally with npm i -g)
-npm install -D github:daniel-style/featflow
+# Optional: enable local branch-protection & auto-cleanup hooks in .git/hooks/ (0 tracked files)
+featflow hooks install --local
 
-# Initialize in your repository (default: trunk mode)
+# Create a task branch in a dedicated worktree
+featflow worktree feat/oauth-pkce
+
+# Draft a feature plan (stored locally in .featflow/features/ via .git/info/exclude)
+cd ../my-repo-worktrees/feat-oauth-pkce
+featflow new oauth-pkce --local
+
+# After verifying & committing, merge back and clean up automatically
+featflow finish feat/oauth-pkce
+```
+
+Want custom branch rules (`developer-branch` mode, `postWorktreeCreate` hooks, etc.) without touching `package.json`? Add just a `.featflow.json` in the repository root.
+
+### Option B — Embed in a Team JS/TS Repository
+
+```bash
+npm install -D github:daniel-style/featflow#v0.2.0
+
+# Initialize (default: trunk mode; or --mode developer-branch)
 npx featflow init --with-githooks
-
-# Or initialize for a team developer-branch workflow
-npx featflow init --mode developer-branch --with-githooks
 
 # Optional: add Codex or Claude Code agent hook configs
 npx featflow init --with-codex-hooks --with-claude-hooks
@@ -92,6 +111,8 @@ main (release, protected)
 
 | Command | Description |
 | --- | --- |
+| `featflow new <slug> [options]` | Create a feature (or `--program`) record from the repo template or `featflow`'s built-in template, auto-filling timestamps, `owner`, and branch. Pass `--local` to store under `.featflow/features/` (excluded via `.git/info/exclude`, zero tracked files). |
+| `featflow hooks <install\|uninstall\|status>` | Manage Git hooks: `--local` (default) adds/removes fenced blocks inside `.git/hooks/` without modifying repo files or overwriting custom hooks; `--repo` installs tracked `.githooks/`. |
 | `featflow init [options]` | Scaffold `.featflow.json`, `features/` templates, `.agents/skills/featflow/SKILL.md`, optional `.githooks/`, and optional Codex / Claude Code hooks. |
 | `featflow sync [options]` | Sync managed Skill, feature templates, and `.githooks/` from the installed `featflow` version without modifying `.featflow.json` or feature records. Pass `--check` in CI to fail on drift, or `--only skill,templates,githooks`. |
 | `featflow setup [dev-branch]` | Configure personal developer branch (in `developer-branch` mode) and safely enable Git hooks without clobbering Husky/Lefthook. |

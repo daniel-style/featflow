@@ -80,20 +80,25 @@ export function listFeatureFiles(repoRoot, featuresDir = "features", subdir = "a
 }
 
 export function resolveActiveFeaturePath(repoRoot, featuresDir = "features") {
-  const pointerPath = path.resolve(repoRoot, featuresDir, "current-feature.md");
-  if (existsSync(pointerPath)) {
-    const pointer = readFileSync(pointerPath, "utf8");
-    const match = pointer.match(/^active_feature:[ \t]*([^\r\n]*)$/m);
-    const rawValue = match ? match[1].trim() : "";
-    if (rawValue) {
-      return rawValue.startsWith(`${featuresDir}/`) ? rawValue : `${featuresDir}/${rawValue}`;
+  const dirsToCheck = featuresDir === ".featflow/features" ? [featuresDir] : [featuresDir, ".featflow/features"];
+
+  for (const dir of dirsToCheck) {
+    const pointerPath = path.resolve(repoRoot, dir, "current-feature.md");
+    if (existsSync(pointerPath)) {
+      const pointer = readFileSync(pointerPath, "utf8");
+      const match = pointer.match(/^active_feature:[ \t]*([^\r\n]*)$/m);
+      const rawValue = match ? match[1].trim() : "";
+      if (rawValue) {
+        return rawValue.startsWith(`${dir}/`) ? rawValue : `${dir}/${rawValue}`;
+      }
+    }
+
+    const activeFiles = listFeatureFiles(repoRoot, dir, "active");
+    if (activeFiles.length === 1) {
+      return activeFiles[0];
     }
   }
 
-  const activeFiles = listFeatureFiles(repoRoot, featuresDir, "active");
-  if (activeFiles.length === 1) {
-    return activeFiles[0];
-  }
   return null;
 }
 

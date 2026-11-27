@@ -44,8 +44,14 @@ export async function runStatus(argv) {
   console.log(`Worktree parent: ${resolveWorktreeParent(repoRoot, config)}`);
   console.log(`Git hooks path: ${hooksPath || "(not configured)"}`);
 
-  const activeFeatures = listFeatureFiles(repoRoot, config.featuresDir, "active");
-  const pausedFeatures = listFeatureFiles(repoRoot, config.featuresDir, "paused");
+  const activeFeatures = [
+    ...listFeatureFiles(repoRoot, config.featuresDir, "active"),
+    ...(config.featuresDir === ".featflow/features" ? [] : listFeatureFiles(repoRoot, ".featflow/features", "active")),
+  ];
+  const pausedFeatures = [
+    ...listFeatureFiles(repoRoot, config.featuresDir, "paused"),
+    ...(config.featuresDir === ".featflow/features" ? [] : listFeatureFiles(repoRoot, ".featflow/features", "paused")),
+  ];
   console.log(`Active feature records: ${activeFeatures.length > 0 ? activeFeatures.join(", ") : "(none)"}`);
   if (pausedFeatures.length > 0) {
     console.log(`Paused feature records: ${pausedFeatures.join(", ")}`);
