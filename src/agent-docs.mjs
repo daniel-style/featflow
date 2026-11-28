@@ -43,17 +43,11 @@ export function resolveAgentDocTargets(repoRoot, explicitTargets = null) {
   const hasAgents = existsSync(agentsPath);
   const hasClaude = existsSync(claudePath);
 
-  if (!hasAgents && !hasClaude) {
+  if (!hasClaude) {
     return ["AGENTS.md"];
-  }
-  if (hasAgents && !hasClaude) {
-    return ["AGENTS.md"];
-  }
-  if (!hasAgents && hasClaude) {
-    return ["CLAUDE.md"];
   }
 
-  if (samePath(agentsPath, claudePath)) {
+  if (hasAgents && samePath(agentsPath, claudePath)) {
     return ["AGENTS.md"];
   }
 

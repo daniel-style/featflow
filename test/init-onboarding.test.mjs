@@ -153,20 +153,22 @@ describe("smart featflow init onboarding", () => {
     try {
       const { repo } = fixture;
 
-      // 1. Only CLAUDE.md exists -> updates CLAUDE.md without creating AGENTS.md
+      // 1. Only CLAUDE.md exists -> always creates AGENTS.md and also updates existing CLAUDE.md
       writeFileSync(path.join(repo, "CLAUDE.md"), "# Claude Instructions\n\nUse strict types.\n");
       assert.equal(featflow(["init", "--minimal", "--no-hooks"], repo).status, 0);
-      assert.equal(existsSync(path.join(repo, "AGENTS.md")), false);
+      assert.equal(existsSync(path.join(repo, "AGENTS.md")), true);
+      assert.equal((readFileSync(path.join(repo, "AGENTS.md"), "utf8").match(/<!-- FEATFLOW_START -->/g) ?? []).length, 1);
       const claudeAfter = readFileSync(path.join(repo, "CLAUDE.md"), "utf8");
       assert.match(claudeAfter, /# Claude Instructions\n\nUse strict types\./);
       assert.equal((claudeAfter.match(/<!-- FEATFLOW_START -->/g) ?? []).length, 1);
 
-      // Re-running init is idempotent (no duplicate block)
+      // Re-running init is idempotent for both AGENTS.md and CLAUDE.md (no duplicate block)
       assert.equal(featflow(["init", "--minimal", "--no-hooks"], repo).status, 0);
+      assert.equal((readFileSync(path.join(repo, "AGENTS.md"), "utf8").match(/<!-- FEATFLOW_START -->/g) ?? []).length, 1);
       assert.equal((readFileSync(path.join(repo, "CLAUDE.md"), "utf8").match(/<!-- FEATFLOW_START -->/g) ?? []).length, 1);
 
-      // 2. When CLAUDE.md delegates via @AGENTS.md -> only AGENTS.md is updated
-      writeFileSync(path.join(repo, "AGENTS.md"), "# Shared Agents\n");
+      // 2. When CLAUDE.md delegates via @AGENTS.md (even if AGENTS.md does not exist yet) -> creates/updates only AGENTS.md
+      rmSync(path.join(repo, "AGENTS.md"));
       writeFileSync(path.join(repo, "CLAUDE.md"), "@AGENTS.md\n");
       assert.equal(featflow(["init", "--minimal", "--no-hooks"], repo).status, 0);
       assert.match(readFileSync(path.join(repo, "AGENTS.md"), "utf8"), /<!-- FEATFLOW_START -->/);
