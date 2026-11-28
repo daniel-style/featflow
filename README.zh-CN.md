@@ -125,6 +125,10 @@ main (发布分支，受保护)
 | `featflow worktree <branch>` | 为任务分支创建独立 worktree，并自动执行 `.featflow.json` 中配置的 `postWorktreeCreate` 命令。 |
 | `featflow finish <branch>` | 完成并收尾任务分支（合并/推送、自动切出待删 worktree、移除干净 worktree 与本地分支）。支持 `--no-push`、`--pr`、`--dry-run`、`--keep-worktree`、`--keep-branch`。 |
 | `featflow issue <subcommand>` | 可选的 GitHub Issues 闭环 CLI（`create` / `list` / `view` / `claim` / `review` / `release` / `labels:sync`，仅在调用时依赖 `gh`）。认领前先预检本地 worktree 再改远端状态，支持通过 `.featflow.json` 的 `issues.assetsRepo` 托管截图，并可通过 `featflow init --with-issues` / `featflow sync` 同步可选 `featflow-issues` Skill。 |
+| `featflow size-check [options]` | 可选的多语言文件行数预算守卫（支持历史基线只减不增棘轮、`--changed`、`--update-baseline`、`--json` 及 `post-tool-use` 即时拦截），通过 `.featflow.json` 的 `fileSizeBudget` 按需启用。 |
+| `featflow regression <impact\|check\|validate>` | 可选的回归守卫账本 CLI（支持 YAML/JSON 账本）：按改动文件检索命中的历史 Bug 不变量、运行守卫命令或校验账本完整性，配套可选 `featflow-regression` Skill。 |
+| `featflow verify [options]` | 按改动文件匹配执行 `.featflow.json` 中的 `verifyCommands`（支持 `--all`、`--with-size`、`--with-regression`、`--dry-run`、`--json`）。 |
+| `featflow codegraph [bootstrap\|status]` | 一键初始化或同步本地 `.codegraph/codegraph.db` 索引（CI 环境或未装 CLI 时静默跳过）。 |
 | `featflow cleanup` | 清理已合入目标分支且工作区干净的本地任务分支与 worktree（也挂在 `post-merge` 钩子自动执行）。 |
 | `featflow pr-cleanup <pr>` | GitHub PR 合并后（依赖 `gh` CLI）同步目标基线分支、删除干净 worktree 与本地/远端分支并 prune。 |
 | `featflow plan-check [path]` | 校验当前 active feature 记录的 `Plan Details` 章节完整度、占位符清理与审批状态。 |

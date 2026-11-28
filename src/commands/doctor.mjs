@@ -11,6 +11,7 @@ import {
 import { loadConfig } from "../config.mjs";
 import { commandExists, findGitCommonDir, findRepoRoot, gitConfigGet, localBranchExists } from "../git.mjs";
 import { validateActiveFeaturePlan } from "../plan.mjs";
+import { inspectCodegraphState } from "./codegraph.mjs";
 import { inspectSyncState } from "./sync.mjs";
 
 const usage = `
@@ -135,9 +136,32 @@ export async function runDoctor(argv) {
   }
 
   const hasIssuesSkill = existsSync(path.join(repoRoot, ".agents", "skills", "featflow-issues", "SKILL.md"));
+  const hasRegressionSkill = existsSync(path.join(repoRoot, ".agents", "skills", "featflow-regression", "SKILL.md"));
   if (config.issues) {
     const assetsDetail = config.issues.assetsRepo ? `, assetsRepo=${config.issues.assetsRepo}` : "";
     add("PASS", "Issues workflow", `enabled (${config.issues.provider}${assetsDetail})`);
+  }
+  if (config.fileSizeBudget) {
+    add(
+      "PASS",
+      "File size budget",
+      `enabled (prod=${config.fileSizeBudget.production}, style=${config.fileSizeBudget.style}, test=${config.fileSizeBudget.test})`,
+    );
+  }
+  if (config.regression) {
+    const ledgerExists = existsSync(path.resolve(repoRoot, config.regression.ledgerFile));
+    add(
+      ledgerExists ? "PASS" : "WARN",
+      "Regression ledger",
+      ledgerExists ? config.regression.ledgerFile : `configured "${config.regression.ledgerFile}" not found`,
+    );
+  }
+
+  const cg = inspectCodegraphState(repoRoot);
+  if (cg.installed) {
+    add("PASS", "CodeGraph", cg.indexed ? "CLI available, local index present" : "CLI available (run `featflow codegraph` to index)");
+  } else {
+    add("INFO", "CodeGraph", "optional — CLI not installed");
   }
 
   const syncGroups = new Set();
@@ -146,6 +170,9 @@ export async function runDoctor(argv) {
   }
   if (hasIssuesSkill || (Boolean(config.issues) && (hasRepoSkill || hasRepoTemplates))) {
     syncGroups.add("issues-skill");
+  }
+  if (hasRegressionSkill) {
+    syncGroups.add("regression-skill");
   }
   if (hasRepoTemplates) {
     syncGroups.add("templates");

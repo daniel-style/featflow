@@ -2,9 +2,11 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
-import { currentBranch, gitChangedFiles } from "./git.mjs";
+import { changedFiles, matchesPattern } from "./changed-files.mjs";
+import { currentBranch } from "./git.mjs";
 import { validateActiveFeaturePlan } from "./plan.mjs";
 import { checkWorkflowReady } from "./policy.mjs";
+import { evaluateFileSizeBudget } from "./size-check.mjs";
 
 const MUTATING_SHELL_PATTERNS = [
   /\b(?:sed|perl)\s+-i\b/,
@@ -40,10 +42,12 @@ export function normalizeHookPayload(adapter, rawInput) {
   const prompt = String(input.prompt ?? input.user_prompt ?? input.userPrompt ?? "");
 
   let command = "";
+  let rawPatch = "";
   let filePaths = [];
 
   if (typeof toolInput === "string") {
     if (toolInput.includes("*** Begin Patch")) {
+      rawPatch = toolInput;
       filePaths = extractCodexPatchPaths(toolInput);
     } else {
       command = toolInput;
@@ -53,8 +57,11 @@ export function normalizeHookPayload(adapter, rawInput) {
       toolInput.cmd ?? toolInput.command ?? toolInput.shell_command ?? "",
     );
     const patch = String(toolInput.patch ?? toolInput.diff ?? toolInput.input ?? "");
-    if (patch.includes("*** Begin Patch")) {
-      filePaths.push(...extractCodexPatchPaths(patch));
+    if (patch) {
+      rawPatch = patch;
+      if (patch.includes("*** Begin Patch")) {
+        filePaths.push(...extractCodexPatchPaths(patch));
+      }
     }
     if (typeof toolInput.file_path === "string" && toolInput.file_path.trim()) {
       filePaths.push(toolInput.file_path.trim());
@@ -71,6 +78,7 @@ export function normalizeHookPayload(adapter, rawInput) {
     adapter,
     toolName,
     command,
+    rawPatch,
     filePaths: [...new Set(filePaths)],
     prompt,
   };
@@ -81,7 +89,7 @@ function isEditToolName(toolName) {
 }
 
 function isSetupCommand(command) {
-  return /\bfeatflow\s+(?:init|setup)\b/.test(command);
+  return /\bfeatflow\s+(?:init|setup)\b|\bpnpm\s+developer:setup\b/.test(command);
 }
 
 function isMutatingShellCommand(command) {
@@ -166,11 +174,29 @@ function checkDangerousCommands(command, config) {
     }
   }
 
+  for (const custom of rules.blockedCommands ?? []) {
+    if (!custom || typeof custom.pattern !== "string" || !custom.pattern) continue;
+    try {
+      if (new RegExp(custom.pattern).test(command)) {
+        return custom.reason || `Command matched blockedCommands rule "${custom.pattern}" in .featflow.json.`;
+      }
+    } catch {
+      // Ignore malformed custom regex in config rather than crashing hooks
+    }
+  }
+
   return null;
 }
 
 export function evaluatePreToolUse(repoRoot, config, payload, env = process.env) {
-  const { command, filePaths } = payload;
+  const { toolName, command, rawPatch, filePaths } = payload;
+
+  if (toolName && toolName.toLowerCase().includes("apply") && rawPatch && filePaths.length === 0) {
+    return {
+      decision: "block",
+      message: "featflow blocked apply_patch because no target file paths could be parsed from the patch payload. Re-run with a standard apply_patch hunk.",
+    };
+  }
 
   const danger = checkDangerousCommands(command, config);
   if (danger) {
@@ -249,6 +275,11 @@ export function evaluateUserPrompt(config, payload) {
     reminders.push(
       "For bug fixes or regressions, inspect existing behavior/tests first, present the root cause and fix plan before editing, and include a regression test in the Test Plan.",
     );
+    if (config.regression) {
+      reminders.push(
+        `Check impacted regression guards in \`${config.regression.ledgerFile}\` via \`featflow regression impact --json\` before editing and record new durable guards.`,
+      );
+    }
   }
 
   if (
@@ -282,30 +313,75 @@ function stateFilePath(repoRoot, name, env = process.env) {
   return path.resolve(dir, name);
 }
 
+export function evaluatePostToolUse(repoRoot, config, payload, env = process.env) {
+  if (env.FEATFLOW_SKIP_POST_TOOL_QUALITY === "1") {
+    return { decision: "allow" };
+  }
+  const budget = config.fileSizeBudget;
+  if (!budget || !budget.enforceInPostToolUse) {
+    return { decision: "allow" };
+  }
+
+  const extSet = new Set(budget.extensions.map((ext) => ext.toLowerCase()));
+  const touched = changedFiles(repoRoot, config).filter((file) => extSet.has(path.extname(file).toLowerCase()));
+  if (touched.length === 0) {
+    return { decision: "allow" };
+  }
+
+  const sig = createHash("sha256")
+    .update(JSON.stringify({ touched, toolName: payload?.toolName ?? "" }))
+    .digest("hex");
+  const sigPath = stateFilePath(repoRoot, "post-tool-size.sig", env);
+  if (existsSync(sigPath) && readFileSync(sigPath, "utf8").trim() === sig) {
+    return { decision: "allow" };
+  }
+  writeFileSync(sigPath, `${sig}\n`);
+
+  const result = evaluateFileSizeBudget(repoRoot, config, { changed: true, files: touched });
+  if (result.ok) {
+    return { decision: "allow" };
+  }
+
+  return {
+    decision: "block",
+    message: [
+      "featflow changed-file size budget failed after tool edit:",
+      ...result.failures.map((f) => `- ${f.path}: ${f.lines} lines exceeds ${f.label}`),
+      "Split oversized files into smaller focused modules before adding more code.",
+    ].join("\n"),
+  };
+}
+
 export function evaluateStopGate(repoRoot, config, env = process.env) {
   if (env.FEATFLOW_DISABLE_STOP_GATE === "1") {
     return { decision: "allow" };
   }
 
-  const changedFiles = gitChangedFiles(repoRoot);
-  if (changedFiles.length === 0) {
+  const files = changedFiles(repoRoot, config);
+  if (files.length === 0) {
     return { decision: "allow" };
   }
 
   const recommendations = [];
   for (const [prefix, command] of Object.entries(config.verifyCommands ?? {})) {
-    const normalized = prefix.replaceAll("\\", "/").replace(/^\.\//, "");
-    const matched =
-      normalized === "*" ||
-      changedFiles.some((file) =>
-        normalized.endsWith("/") ? file.startsWith(normalized) : file === normalized || file.startsWith(`${normalized}/`),
-      );
+    const matched = prefix === "*" || files.some((file) => matchesPattern(file, prefix));
     if (matched) {
       recommendations.push(`${prefix}: run \`${command}\`.`);
     }
   }
 
-  if (changedFiles.some((file) => file.startsWith(`${config.featuresDir}/`))) {
+  if (config.fileSizeBudget && config.fileSizeBudget.enforceInStopGate) {
+    const extSet = new Set(config.fileSizeBudget.extensions.map((ext) => ext.toLowerCase()));
+    if (files.some((file) => extSet.has(path.extname(file).toLowerCase()))) {
+      recommendations.push("File size budget: run `featflow size-check --changed`.");
+    }
+  }
+
+  if (config.regression && config.regression.enforceInStopGate) {
+    recommendations.push("Regression ledger: run `featflow regression impact`.");
+  }
+
+  if (files.some((file) => file.startsWith(`${config.featuresDir}/`))) {
     recommendations.push("Feature records changed: ensure `Verification` and `Handoff` sections reflect actual results.");
   }
 
@@ -314,7 +390,7 @@ export function evaluateStopGate(repoRoot, config, env = process.env) {
   }
 
   const sig = createHash("sha256")
-    .update(JSON.stringify({ changedFiles, recommendations }))
+    .update(JSON.stringify({ changedFiles: files, recommendations }))
     .digest("hex");
   const sigPath = stateFilePath(repoRoot, "stop-gate.sig", env);
   if (existsSync(sigPath) && readFileSync(sigPath, "utf8").trim() === sig) {

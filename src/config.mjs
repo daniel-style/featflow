@@ -31,6 +31,22 @@ export const DEFAULT_ISSUES_CONFIG = {
   autoWorktree: true,
 };
 
+export const DEFAULT_FILE_SIZE_BUDGET = {
+  production: 600,
+  style: 700,
+  test: 900,
+  extensions: [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".py", ".css"],
+  ignore: [],
+  baselineFile: ".featflow-size-baseline.json",
+  enforceInPostToolUse: true,
+  enforceInStopGate: true,
+};
+
+export const DEFAULT_REGRESSION_CONFIG = {
+  ledgerFile: "context/regression-ledger.yml",
+  enforceInStopGate: false,
+};
+
 export const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 export function presetConfig(mode = "trunk") {
@@ -135,6 +151,67 @@ export function resolveIssuesConfig(config) {
   return { ...DEFAULT_ISSUES_CONFIG };
 }
 
+export function normalizeFileSizeBudget(rawBudget) {
+  if (!isPlainObject(rawBudget)) {
+    return null;
+  }
+  const positiveInt = (val, fallback) =>
+    typeof val === "number" && Number.isFinite(val) && val > 0 ? Math.floor(val) : fallback;
+  const extensions = Array.isArray(rawBudget.extensions)
+    ? rawBudget.extensions
+        .filter((item) => typeof item === "string" && item.trim().length > 0)
+        .map((item) => (item.trim().startsWith(".") ? item.trim().toLowerCase() : `.${item.trim().toLowerCase()}`))
+    : [...DEFAULT_FILE_SIZE_BUDGET.extensions];
+  const ignore = Array.isArray(rawBudget.ignore)
+    ? rawBudget.ignore.filter((item) => typeof item === "string" && item.trim().length > 0).map((item) => item.trim())
+    : [];
+  const baselineFile =
+    rawBudget.baselineFile === null
+      ? null
+      : typeof rawBudget.baselineFile === "string" && rawBudget.baselineFile.trim()
+        ? rawBudget.baselineFile.trim()
+        : DEFAULT_FILE_SIZE_BUDGET.baselineFile;
+
+  return {
+    production: positiveInt(rawBudget.production, DEFAULT_FILE_SIZE_BUDGET.production),
+    style: positiveInt(rawBudget.style ?? rawBudget.css, DEFAULT_FILE_SIZE_BUDGET.style),
+    test: positiveInt(rawBudget.test, DEFAULT_FILE_SIZE_BUDGET.test),
+    extensions,
+    ignore,
+    baselineFile,
+    enforceInPostToolUse: rawBudget.enforceInPostToolUse !== false,
+    enforceInStopGate: rawBudget.enforceInStopGate !== false,
+  };
+}
+
+export function resolveFileSizeBudget(config) {
+  if (config && isPlainObject(config.fileSizeBudget)) {
+    return normalizeFileSizeBudget(config.fileSizeBudget);
+  }
+  return { ...DEFAULT_FILE_SIZE_BUDGET };
+}
+
+export function normalizeRegressionConfig(rawRegression) {
+  if (!isPlainObject(rawRegression)) {
+    return null;
+  }
+  const ledgerFile =
+    typeof rawRegression.ledgerFile === "string" && rawRegression.ledgerFile.trim()
+      ? rawRegression.ledgerFile.trim()
+      : DEFAULT_REGRESSION_CONFIG.ledgerFile;
+  return {
+    ledgerFile,
+    enforceInStopGate: Boolean(rawRegression.enforceInStopGate),
+  };
+}
+
+export function resolveRegressionConfig(config) {
+  if (config && isPlainObject(config.regression)) {
+    return normalizeRegressionConfig(config.regression);
+  }
+  return { ...DEFAULT_REGRESSION_CONFIG };
+}
+
 export function resolveWorktreeParent(repoRoot, config) {
   const mainRoot = findMainRepoRoot(repoRoot) ?? repoRoot;
   if (config.worktreeParent) {
@@ -182,6 +259,8 @@ export function loadConfig(startCwd = process.cwd()) {
     ...raw,
     dangerousCommands,
     issues: normalizeIssuesConfig(raw.issues),
+    fileSizeBudget: normalizeFileSizeBudget(raw.fileSizeBudget),
+    regression: normalizeRegressionConfig(raw.regression),
     protectedBranches: Array.isArray(raw.protectedBranches)
       ? raw.protectedBranches.filter((item) => typeof item === "string" && item.trim().length > 0)
       : base.protectedBranches,

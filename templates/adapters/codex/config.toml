@@ -10,6 +10,10 @@ preToolUse = [
   { command = "featflow hook codex pre-tool-use", timeoutSec = 5, statusMessage = "Checking featflow branch and plan policy" },
 ]
 
+postToolUse = [
+  { command = "featflow hook codex post-tool-use", timeoutSec = 30, statusMessage = "Checking featflow file-size budget" },
+]
+
 stop = [
   { command = "featflow hook codex stop", timeoutSec = 8, statusMessage = "Checking featflow verification reminders" },
 ]

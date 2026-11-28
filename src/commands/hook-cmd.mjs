@@ -1,6 +1,7 @@
 import { loadConfig } from "../config.mjs";
 import { fail } from "../git.mjs";
 import {
+  evaluatePostToolUse,
   evaluatePreToolUse,
   evaluateStopGate,
   evaluateUserPrompt,
@@ -9,11 +10,11 @@ import {
 
 const usage = `
 Usage:
-  featflow hook <codex|claude-code> <pre-tool-use|user-prompt|stop>
+  featflow hook <codex|claude-code> <pre-tool-use|post-tool-use|user-prompt|stop>
 
 Reads hook JSON from stdin and emits the adapter-appropriate response and exit code:
   - Exit 0: allow (and optional JSON stdout for user-prompt)
-  - Exit 2: block with stderr message (for pre-tool-use and stop)
+  - Exit 2: block with stderr message (for pre-tool-use, post-tool-use, and stop)
 `.trim();
 
 async function readStdinJson() {
@@ -42,8 +43,11 @@ export async function runHook(argv) {
   if (!["codex", "claude-code"].includes(adapter)) {
     fail(`Unsupported hook adapter "${adapter}". Expected "codex" or "claude-code".`, usage);
   }
-  if (!["pre-tool-use", "user-prompt", "stop"].includes(event ?? "")) {
-    fail(`Unsupported hook event "${event ?? ""}". Expected "pre-tool-use", "user-prompt", or "stop".`, usage);
+  if (!["pre-tool-use", "post-tool-use", "user-prompt", "stop"].includes(event ?? "")) {
+    fail(
+      `Unsupported hook event "${event ?? ""}". Expected "pre-tool-use", "post-tool-use", "user-prompt", or "stop".`,
+      usage,
+    );
   }
 
   const rawInput = await readStdinJson();
@@ -52,6 +56,15 @@ export async function runHook(argv) {
 
   if (event === "pre-tool-use") {
     const result = evaluatePreToolUse(repoRoot, config, payload, process.env);
+    if (result.decision === "block") {
+      process.stderr.write(`${result.message}\n`);
+      process.exit(2);
+    }
+    return;
+  }
+
+  if (event === "post-tool-use") {
+    const result = evaluatePostToolUse(repoRoot, config, payload, process.env);
     if (result.decision === "block") {
       process.stderr.write(`${result.message}\n`);
       process.exit(2);

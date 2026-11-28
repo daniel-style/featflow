@@ -5,6 +5,7 @@ import path from "node:path";
 
 import { packageRoot } from "../src/config.mjs";
 import { runCleanup } from "../src/commands/cleanup.mjs";
+import { runCodegraph } from "../src/commands/codegraph.mjs";
 import { runDoctor } from "../src/commands/doctor.mjs";
 import { runFinish } from "../src/commands/finish.mjs";
 import { runHook } from "../src/commands/hook-cmd.mjs";
@@ -15,9 +16,12 @@ import { runNew } from "../src/commands/new.mjs";
 import { runPlanCheck } from "../src/commands/plan-check.mjs";
 import { runPolicy } from "../src/commands/policy-cmd.mjs";
 import { runPrCleanup } from "../src/commands/pr-cleanup.mjs";
+import { runRegression } from "../src/commands/regression.mjs";
 import { runSetup } from "../src/commands/setup.mjs";
+import { runSizeCheck } from "../src/commands/size-check.mjs";
 import { runStatus } from "../src/commands/status.mjs";
 import { runSync } from "../src/commands/sync.mjs";
+import { runVerify } from "../src/commands/verify.mjs";
 import { runWorktree } from "../src/commands/worktree.mjs";
 
 const pkg = JSON.parse(readFileSync(path.join(packageRoot, "package.json"), "utf8"));
@@ -38,6 +42,10 @@ Commands:
   worktree      Create a typed task branch in a dedicated Git worktree
   finish        Merge/push a verified task branch and clean up its worktree
   issue         GitHub Issues closed-loop CLI (create | list | view | claim | review | release | labels:sync)
+  size-check    Check files against configured fileSizeBudget (with legacy baseline ratchet)
+  regression    Inspect or validate the regression memory ledger (impact | check | validate)
+  verify        Run verifyCommands matching changed files (--all for full)
+  codegraph     Bootstrap or inspect local CodeGraph index (.codegraph/codegraph.db)
   cleanup       Remove clean worktrees and local task branches already merged into base
   pr-cleanup    Sync base branch and clean up local worktree/branch after a GitHub PR merge
   plan-check    Validate that the active feature record has complete, approved Plan Details
@@ -63,6 +71,11 @@ const commands = {
   finish: runFinish,
   issue: runIssue,
   issues: runIssue,
+  "size-check": runSizeCheck,
+  regression: runRegression,
+  "regression-impact": (rest) => runRegression(rest, "impact"),
+  verify: runVerify,
+  codegraph: runCodegraph,
   cleanup: runCleanup,
   "pr-cleanup": runPrCleanup,
   "plan-check": runPlanCheck,

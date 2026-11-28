@@ -21,6 +21,17 @@
         ]
       }
     ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|MultiEdit|Write|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "featflow hook claude-code post-tool-use"
+          }
+        ]
+      }
+    ],
     "Stop": [
       {
         "hooks": [

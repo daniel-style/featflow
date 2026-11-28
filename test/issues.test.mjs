@@ -214,9 +214,7 @@ process.exit(1);
 `,
   );
 
-  const wrapper = path.join(binDir, "gh");
-  writeFileSync(wrapper, `#!/bin/sh\nexec ${JSON.stringify(process.execPath)} ${JSON.stringify(scriptPath)} "$@"\n`);
-  chmodSync(wrapper, 0o755);
+  return scriptPath;
 }
 
 describe("featflow GitHub Issues pure helpers", () => {
@@ -325,9 +323,9 @@ describe("featflow issue CLI end-to-end", () => {
         stateFile,
         JSON.stringify({ currentUser: "alice", nextNumber: 10, issues: {}, assets: {}, syncedLabels: {} }, null, 2),
       );
-      createMockGh(mockBinDir, stateFile);
+      const mockGhScript = createMockGh(mockBinDir, stateFile);
 
-      const env = { PATH: `${mockBinDir}${path.delimiter}${process.env.PATH ?? ""}` };
+      const env = { FEATFLOW_GH_SCRIPT: mockGhScript };
 
       // 1. labels:sync
       const synced = JSON.parse(mustRun(process.execPath, [CLI, "issue", "labels:sync", "--json"], repoDir, { env }));
@@ -503,8 +501,8 @@ describe("featflow issue CLI end-to-end", () => {
         stateFile,
         JSON.stringify({ currentUser: "alice", nextNumber: 5, issues: {}, assets: {}, syncedLabels: {} }, null, 2),
       );
-      createMockGh(mockBinDir, stateFile);
-      const env = { PATH: `${mockBinDir}${path.delimiter}${process.env.PATH ?? ""}` };
+      const mockGhScript = createMockGh(mockBinDir, stateFile);
+      const env = { FEATFLOW_GH_SCRIPT: mockGhScript };
 
       // --attach without assetsRepo fails cleanly with guidance
       const shotPath = path.join(tmp, "shot.png");

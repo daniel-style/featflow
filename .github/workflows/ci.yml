@@ -21,5 +21,7 @@ jobs:
           node-version: ${{ matrix.node }}
       - name: CLI smoke check
         run: npm run smoke
+      - name: File size budget check
+        run: npm run lint:size
       - name: Run test suite
         run: npm test

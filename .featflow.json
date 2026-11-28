@@ -1,0 +1,23 @@
+{
+  "mode": "trunk",
+  "baseBranch": "main",
+  "integrationBranch": "main",
+  "releaseBranch": "main",
+  "protectedBranches": ["main"],
+  "finishTarget": "merge",
+  "productPaths": ["src/", "bin/"],
+  "verifyCommands": {
+    "src/": "npm test",
+    "bin/": "npm run smoke && npm test"
+  },
+  "fileSizeBudget": {
+    "production": 600,
+    "style": 700,
+    "test": 900,
+    "extensions": [".mjs"],
+    "ignore": [],
+    "baselineFile": null,
+    "enforceInPostToolUse": true,
+    "enforceInStopGate": true
+  }
+}

@@ -1,6 +1,6 @@
 {
   "name": "featflow",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "AI-native feature workflow: Skill + CLI + Git/Agent Hooks for discovery-first planning, Git worktree isolation, GitHub Issues closed loop, and safe branch lifecycles.",
   "type": "module",
   "license": "MIT",
@@ -35,10 +35,13 @@
     ".": "./src/index.mjs",
     "./config": "./src/config.mjs",
     "./git": "./src/git.mjs",
+    "./changed-files": "./src/changed-files.mjs",
     "./plan": "./src/plan.mjs",
     "./policy": "./src/policy.mjs",
     "./hooks": "./src/hooks-core.mjs",
-    "./issues": "./src/issues.mjs"
+    "./issues": "./src/issues.mjs",
+    "./size-check": "./src/size-check.mjs",
+    "./regression": "./src/regression.mjs"
   },
   "files": [
     "bin/",
@@ -51,6 +54,7 @@
   ],
   "scripts": {
     "test": "node --test",
-    "smoke": "node bin/featflow.mjs --help"
+    "smoke": "node bin/featflow.mjs --help",
+    "lint:size": "node bin/featflow.mjs size-check"
   }
 }

@@ -12,29 +12,31 @@ import { loadConfig, packageRoot } from "../config.mjs";
 import { fail, findRepoRoot } from "../git.mjs";
 import { configureGitHooksSafely } from "./hooks-cmd.mjs";
 
-const VALID_GROUPS = new Set(["skill", "issues-skill", "templates", "githooks", "agent-docs"]);
+const VALID_GROUPS = new Set(["skill", "issues-skill", "regression-skill", "templates", "githooks", "agent-docs"]);
 
 const usage = `
 Usage:
   featflow sync [options]
 
-Synchronizes featflow-managed files (Skill, optional featflow-issues Skill, feature templates,
-.githooks, and managed AGENTS.md / CLAUDE.md workflow blocks) from the installed featflow
-package into the current repository without touching .featflow.json, active/done
+Synchronizes featflow-managed files (Skill, optional featflow-issues / featflow-regression Skills,
+feature templates, .githooks, and managed AGENTS.md / CLAUDE.md workflow blocks) from the installed
+featflow package into the current repository without touching .featflow.json, active/done
 feature records, or custom content outside <!-- FEATFLOW_START --> markers.
 
 Options:
-  --check              Verify managed files match the installed featflow version (exit 1 on drift).
-  --dry-run            Print files that would be created or updated without writing.
-  --only <groups>      Comma-separated subset: skill,issues-skill,templates,githooks,agent-docs.
-  --with-issues-skill  Include .agents/skills/featflow-issues/SKILL.md even if issues is not configured yet.
-  --skip-issues-skill  Skip .agents/skills/featflow-issues/SKILL.md even if issues is configured.
-  --with-githooks      Include .githooks even if the directory does not exist yet.
-  --skip-githooks      Skip .githooks even if the directory exists.
-  --with-agent-docs    Include AGENTS.md / CLAUDE.md even if no managed block exists yet.
-  --skip-agent-docs    Skip AGENTS.md / CLAUDE.md even if a managed block exists.
-  --json               Output machine-readable JSON.
-  -h, --help           Show this help.
+  --check                  Verify managed files match the installed featflow version (exit 1 on drift).
+  --dry-run                Print files that would be created or updated without writing.
+  --only <groups>          Comma-separated subset: skill,issues-skill,regression-skill,templates,githooks,agent-docs.
+  --with-issues-skill      Include .agents/skills/featflow-issues/SKILL.md even if issues is not configured yet.
+  --skip-issues-skill      Skip .agents/skills/featflow-issues/SKILL.md even if issues is configured.
+  --with-regression-skill  Include .agents/skills/featflow-regression/SKILL.md.
+  --skip-regression-skill  Skip .agents/skills/featflow-regression/SKILL.md even if present.
+  --with-githooks          Include .githooks even if the directory does not exist yet.
+  --skip-githooks          Skip .githooks even if the directory exists.
+  --with-agent-docs        Include AGENTS.md / CLAUDE.md even if no managed block exists yet.
+  --skip-agent-docs        Skip AGENTS.md / CLAUDE.md even if a managed block exists.
+  --json                   Output machine-readable JSON.
+  -h, --help               Show this help.
 `.trim();
 
 function parseArgs(argv) {
@@ -44,6 +46,8 @@ function parseArgs(argv) {
     only: null,
     withIssuesSkill: false,
     skipIssuesSkill: false,
+    withRegressionSkill: false,
+    skipRegressionSkill: false,
     withGithooks: false,
     skipGithooks: false,
     withAgentDocs: false,
@@ -71,6 +75,14 @@ function parseArgs(argv) {
     }
     if (arg === "--skip-issues-skill") {
       options.skipIssuesSkill = true;
+      continue;
+    }
+    if (arg === "--with-regression-skill") {
+      options.withRegressionSkill = true;
+      continue;
+    }
+    if (arg === "--skip-regression-skill") {
+      options.skipRegressionSkill = true;
       continue;
     }
     if (arg === "--with-githooks") {
@@ -118,11 +130,11 @@ function resolveGroups(options, repoRoot, config) {
       .map((item) => item.trim())
       .filter(Boolean);
     if (requested.length === 0) {
-      fail("--only requires at least one group (skill, issues-skill, templates, githooks, agent-docs).", usage);
+      fail("--only requires at least one group (skill, issues-skill, regression-skill, templates, githooks, agent-docs).", usage);
     }
     for (const group of requested) {
       if (!VALID_GROUPS.has(group)) {
-        fail(`Unknown --only group "${group}". Valid groups: skill, issues-skill, templates, githooks, agent-docs.`, usage);
+        fail(`Unknown --only group "${group}". Valid groups: skill, issues-skill, regression-skill, templates, githooks, agent-docs.`, usage);
       }
     }
     return new Set(requested);
@@ -130,6 +142,7 @@ function resolveGroups(options, repoRoot, config) {
 
   const hasRepoSkill = existsSync(path.join(repoRoot, ".agents", "skills", "featflow", "SKILL.md"));
   const hasIssuesSkill = existsSync(path.join(repoRoot, ".agents", "skills", "featflow-issues", "SKILL.md"));
+  const hasRegressionSkill = existsSync(path.join(repoRoot, ".agents", "skills", "featflow-regression", "SKILL.md"));
   const hasRepoTemplates = existsSync(path.join(repoRoot, config.featuresDir, "_template.md"));
   const hasGithooksDir = existsSync(path.join(repoRoot, ".githooks"));
   const managedAgentDocs = findManagedAgentDocs(repoRoot);
@@ -145,6 +158,9 @@ function resolveGroups(options, repoRoot, config) {
     (options.withIssuesSkill || hasIssuesSkill || (!isMinimalLayout && Boolean(config.issues)))
   ) {
     groups.add("issues-skill");
+  }
+  if (!options.skipRegressionSkill && (options.withRegressionSkill || hasRegressionSkill)) {
+    groups.add("regression-skill");
   }
   if (!options.skipGithooks && (options.withGithooks || hasGithooksDir)) {
     groups.add("githooks");
@@ -174,6 +190,16 @@ export function buildManagedFiles(repoRoot, config, groups) {
       group: "issues-skill",
       src: path.join(packageRoot, "skills", "featflow-issues", "SKILL.md"),
       dest: path.join(repoRoot, ".agents", "skills", "featflow-issues", "SKILL.md"),
+      executable: false,
+    });
+  }
+
+  if (groups.has("regression-skill")) {
+    files.push({
+      kind: "file",
+      group: "regression-skill",
+      src: path.join(packageRoot, "skills", "featflow-regression", "SKILL.md"),
+      dest: path.join(repoRoot, ".agents", "skills", "featflow-regression", "SKILL.md"),
       executable: false,
     });
   }

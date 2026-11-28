@@ -125,6 +125,10 @@ main (release, protected)
 | `featflow worktree <branch> [path] [base]` | Create a typed task branch in a dedicated sibling worktree and run configured `postWorktreeCreate` commands. |
 | `featflow finish <branch>` | Merge/push a verified task branch, safely exit the task worktree, delete the clean worktree & local branch, and prune other merged task branches. Supports `--no-push`, `--pr`, `--dry-run`, `--keep-worktree`, `--keep-branch`. |
 | `featflow issue <subcommand>` | Optional GitHub Issues closed-loop CLI (`create`, `list`, `view`, `claim`, `review`, `release`, `labels:sync`) powered by `gh`. Atomically preflights worktree creation before claiming, supports optional screenshot uploads via `issues.assetsRepo`, and syncs optional `featflow-issues` Skill via `featflow init --with-issues` / `featflow sync`. |
+| `featflow size-check [options]` | Optional multi-language file line-count budget checker with legacy baseline ratchet (`--changed`, `--update-baseline`, `--json`), configured via `fileSizeBudget` in `.featflow.json`. |
+| `featflow regression <impact\|check\|validate>` | Optional Regression Guardian CLI for YAML/JSON regression ledgers (`regression.ledgerFile`): find impacted bug invariants for changed files, run guard commands, or validate ledger integrity. |
+| `featflow verify [options]` | Run configured `verifyCommands` matching changed files (`--all`, `--with-size`, `--with-regression`, `--dry-run`, `--json`). |
+| `featflow codegraph [bootstrap\|status]` | Initialize or sync local `.codegraph/codegraph.db` index (skips cleanly in CI or when `codegraph` CLI is absent). |
 | `featflow cleanup` | Clean local task branches and clean worktrees already merged into the base/developer branch. Also runs on `post-merge` via `--post-merge`. |
 | `featflow pr-cleanup <pr>` | After a GitHub PR merges (via `gh`), sync the local base branch, remove the clean PR worktree, delete local/remote branch, and prune refs. |
 | `featflow plan-check [path]` | Validate required `Plan Details` headings, placeholder resolution (ignoring code spans/fences), and recorded pre-implementation approval. |
