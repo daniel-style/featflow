@@ -280,4 +280,37 @@ describe("featflow CLI end-to-end workflows", () => {
       rmSync(fixture.parent, { force: true, recursive: true });
     }
   });
+
+  it("prompts interactively for developer branch name on TTY and fails cleanly in non-TTY mode", () => {
+    const fixture = createRepo("setup-interactive", { withDev: true });
+    try {
+      const { repo } = fixture;
+      mustFeatflow(["init", "--mode", "developer-branch", "--with-githooks"], repo);
+
+      // Non-TTY without branch name fails cleanly and suggests user.name slug
+      const nonTty = featflow(["setup", "--local-only"], repo);
+      assert.notEqual(nonTty.status, 0);
+      assert.match(nonTty.stderr, /featflow setup alice/);
+
+      // Interactive TTY accepting default suggestion (Enter)
+      const acceptedDefault = mustFeatflow(["setup", "--local-only"], repo, {
+        env: { FEATFLOW_FORCE_TTY: "1" },
+        input: "\n",
+      });
+      assert.match(acceptedDefault, /Personal developer branch name \[alice\]:/);
+      assert.equal(mustRun("git", ["config", "--get", "featflow.developerBranch"], repo), "alice");
+      assert.equal(branchExists(repo, "alice"), true);
+
+      // Interactive TTY entering a custom developer branch name
+      const customChoice = mustFeatflow(["setup", "--local-only"], repo, {
+        env: { FEATFLOW_FORCE_TTY: "1" },
+        input: "bob\n",
+      });
+      assert.match(customChoice, /Personal developer branch name \[alice\]:/);
+      assert.equal(mustRun("git", ["config", "--get", "featflow.developerBranch"], repo), "bob");
+      assert.equal(branchExists(repo, "bob"), true);
+    } finally {
+      rmSync(fixture.parent, { force: true, recursive: true });
+    }
+  });
 });

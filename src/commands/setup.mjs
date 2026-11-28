@@ -1,9 +1,11 @@
 import { existsSync } from "node:fs";
 import path from "node:path";
+import { createInterface } from "node:readline/promises";
 
 import { loadConfig } from "../config.mjs";
 import {
   fail,
+  gitConfigGet,
   gitConfigSet,
   localBranchExists,
   remoteBranchExists,
@@ -105,7 +107,9 @@ function ensureDeveloperBranch(repoRoot, branchName, remote, config, localOnly) 
       runWrite("git", ["branch", branchName, remoteIntegration], repoRoot);
     }
 
-    runWrite("git", ["push", "-u", remote, branchName], repoRoot);
+    runWrite("git", ["push", "-u", remote, branchName], repoRoot, {
+      env: { FEATFLOW_BOOTSTRAP: "1" },
+    });
     return remoteExistsForBranch ? "updated existing remote branch" : "created and pushed new developer branch";
   }
 
@@ -122,17 +126,62 @@ function ensureDeveloperBranch(repoRoot, branchName, remote, config, localOnly) 
   return "using existing local developer branch";
 }
 
+function suggestDeveloperBranch(repoRoot, config, protectedBranches) {
+  const existing = gitConfigGet(config.developerBranchConfigKey, repoRoot);
+  if (existing && !protectedBranches.has(existing)) {
+    return existing;
+  }
+  const rawName = gitConfigGet("user.name", repoRoot);
+  const slug = rawName
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  if (slug && !protectedBranches.has(slug)) {
+    return slug;
+  }
+  return "";
+}
+
+async function resolveDeveloperBranch(options, repoRoot, config, protectedBranches) {
+  if (options.branch) {
+    return options.branch;
+  }
+  const suggested = suggestDeveloperBranch(repoRoot, config, protectedBranches);
+  const isInteractive =
+    Boolean(process.stdin.isTTY && process.stdout.isTTY) || process.env.FEATFLOW_FORCE_TTY === "1";
+
+  if (isInteractive) {
+    const rl = createInterface({ input: process.stdin, output: process.stdout });
+    try {
+      const promptLabel = suggested
+        ? `Personal developer branch name [${suggested}]: `
+        : "Personal developer branch name (e.g. alice): ";
+      const answer = (await rl.question(promptLabel)).trim();
+      const chosen = answer || suggested;
+      if (!chosen) {
+        fail("Developer branch name is required in developer-branch mode (e.g. `featflow setup alice`).", usage);
+      }
+      return chosen;
+    } finally {
+      rl.close();
+    }
+  }
+
+  const example = suggested || "alice";
+  fail(`Developer branch name is required in developer-branch mode (e.g. \`featflow setup ${example}\`).`, usage);
+}
+
 export async function runSetup(argv) {
   const options = parseArgs(argv);
   const { config, repoRoot } = loadConfig(process.cwd());
   const remote = options.remote || config.remote;
 
   if (config.mode === "developer-branch") {
-    if (!options.branch) {
-      fail("Developer branch name is required in developer-branch mode (e.g. `featflow setup alice`).", usage);
-    }
+    const protectedBranches = new Set(config.protectedBranches);
+    options.branch = await resolveDeveloperBranch(options, repoRoot, config, protectedBranches);
     try {
-      validateDeveloperBranchName(options.branch, repoRoot, new Set(config.protectedBranches));
+      validateDeveloperBranchName(options.branch, repoRoot, protectedBranches);
     } catch (error) {
       fail(error instanceof Error ? error.message : String(error));
     }
