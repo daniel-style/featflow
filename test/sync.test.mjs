@@ -47,10 +47,14 @@ function createRepo(name) {
 }
 
 describe("featflow sync", () => {
-  it("detects drift via --check, syncs managed files cleanly, and preserves .featflow.json and active records", () => {
+  it("detects drift via --check, syncs managed files cleanly, and preserves .featflow.json, active records, and custom AGENTS.md content", () => {
     const fixture = createRepo("drift");
     try {
       const { repo } = fixture;
+
+      // Pre-populate custom AGENTS.md rules before init
+      const agentsPath = path.join(repo, "AGENTS.md");
+      writeFileSync(agentsPath, "# Project Rules\n\nKeep commits small.\n");
 
       // Init with custom config & githooks
       assert.equal(featflow(["init", "--mode", "developer-branch", "--with-githooks"], repo).status, 0);
@@ -65,12 +69,12 @@ describe("featflow sync", () => {
       const activePath = path.join(repo, "features", "active", "2026-06-15-1000-keep-me.md");
       writeFileSync(activePath, "# Keep my active feature\n");
 
-      // Immediately after init, --check passes
+      // Immediately after init, --check passes (skill + 3 templates + 3 githooks + AGENTS.md = 8)
       const cleanCheck = featflow(["sync", "--check"], repo);
       assert.equal(cleanCheck.status, 0, cleanCheck.stderr);
-      assert.match(cleanCheck.stdout, /passed \(7 managed files up to date\)/);
+      assert.match(cleanCheck.stdout, /passed \(8 managed files up to date\)/);
 
-      // Introduce drift in Skill, template, and hook; delete README.md
+      // Introduce drift in Skill, template, hook, and AGENTS.md managed block; delete README.md
       const skillPath = path.join(repo, ".agents", "skills", "featflow", "SKILL.md");
       const templatePath = path.join(repo, "features", "_template.md");
       const hookPath = path.join(repo, ".githooks", "pre-commit");
@@ -79,6 +83,10 @@ describe("featflow sync", () => {
       writeFileSync(skillPath, "stale skill\n");
       writeFileSync(templatePath, "stale template\n");
       writeFileSync(hookPath, "#!/usr/bin/env sh\necho stale\n");
+      writeFileSync(
+        agentsPath,
+        "# Project Rules\n\nKeep commits small.\n\n<!-- FEATFLOW_START -->\nstale workflow snippet\n<!-- FEATFLOW_END -->\n",
+      );
       rmSync(readmePath);
 
       // --check fails with JSON summary
@@ -87,15 +95,17 @@ describe("featflow sync", () => {
       const report = JSON.parse(driftCheck.stdout);
       assert.equal(report.ok, false);
       assert.deepEqual(report.missing, ["features/README.md"]);
-      assert.equal(report.drifted.length, 3);
+      assert.equal(report.drifted.length, 4);
+      assert.equal(report.drifted.includes("AGENTS.md"), true);
 
       // --dry-run does not modify files
       const dryRun = featflow(["sync", "--dry-run"], repo);
       assert.equal(dryRun.status, 0);
       assert.match(dryRun.stdout, /Would sync/);
       assert.equal(existsSync(readmePath), false);
+      assert.match(readFileSync(agentsPath, "utf8"), /stale workflow snippet/);
 
-      // Real sync restores all managed files without touching .featflow.json or active records
+      // Real sync restores all managed files without touching .featflow.json, active records, or custom AGENTS.md text
       const synced = featflow(["sync"], repo);
       assert.equal(synced.status, 0, synced.stderr);
       assert.match(synced.stdout, /Synced featflow managed files/);
@@ -103,17 +113,22 @@ describe("featflow sync", () => {
       // Re-check passes!
       assert.equal(featflow(["sync", "--check"], repo).status, 0);
 
-      // .featflow.json and active feature are completely untouched
+      // .featflow.json, active feature, and custom AGENTS.md header are completely untouched
       const afterConfig = JSON.parse(readFileSync(configPath, "utf8"));
       assert.equal(afterConfig.developerBranchConfigKey, "custom.developerBranch");
       assert.deepEqual(afterConfig.postWorktreeCreate, ["echo ready"]);
       assert.equal(readFileSync(activePath, "utf8"), "# Keep my active feature\n");
+
+      const afterAgents = readFileSync(agentsPath, "utf8");
+      assert.match(afterAgents, /# Project Rules\n\nKeep commits small\./);
+      assert.match(afterAgents, /Universal Pre-Implementation Gate/);
+      assert.doesNotMatch(afterAgents, /stale workflow snippet/);
     } finally {
       rmSync(fixture.parent, { force: true, recursive: true });
     }
   });
 
-  it("supports --only subset filtering and skips githooks when .githooks does not exist", () => {
+  it("supports --only subset filtering (including agent-docs) and skips githooks when .githooks does not exist", () => {
     const fixture = createRepo("subset");
     try {
       const { repo } = fixture;
@@ -127,11 +142,18 @@ describe("featflow sync", () => {
       // Check only skill passes
       assert.equal(featflow(["sync", "--check", "--only", "skill"], repo).status, 0);
 
-      // Default sync (without .githooks present) syncs skill + templates only
+      // Default sync (without .githooks or managed AGENTS.md present) syncs skill + templates only
       const syncDefault = featflow(["sync"], repo);
       assert.equal(syncDefault.status, 0, syncDefault.stderr);
       assert.equal(existsSync(path.join(repo, "features", "_template.md")), true);
-      assert.equal(existsSync(path.join(repo, ".githooks", "pre-commit")), false);
+      assert.equal(existsSync(path.join(repo, "AGENTS.md")), false);
+
+      // Explicit --only agent-docs injects managed block into AGENTS.md
+      const syncDocs = featflow(["sync", "--only", "agent-docs"], repo);
+      assert.equal(syncDocs.status, 0, syncDocs.stderr);
+      assert.equal(existsSync(path.join(repo, "AGENTS.md")), true);
+      assert.match(readFileSync(path.join(repo, "AGENTS.md"), "utf8"), /<!-- FEATFLOW_START -->/);
+      assert.equal(featflow(["sync", "--check", "--only", "agent-docs"], repo).status, 0);
     } finally {
       rmSync(fixture.parent, { force: true, recursive: true });
     }

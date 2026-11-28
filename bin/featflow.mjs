@@ -30,8 +30,8 @@ Usage:
 Commands:
   new           Create a feature or program record from repo or built-in template (--local for zero-footprint)
   hooks         Install/uninstall/inspect Git hooks (--local into .git/hooks/ or --repo into .githooks/)
-  init          Scaffold .featflow.json, feature templates, skill, and optional hooks
-  sync          Sync managed Skill, templates, and .githooks from installed featflow (--check for CI)
+  init          Auto-detect repo config, inject AGENTS.md block, and scaffold featflow (--minimal for lightweight)
+  sync          Sync managed Skill, templates, .githooks, and AGENTS.md blocks (--check for CI)
   setup         Configure developer branch (if applicable) and safely enable Git hooks
   status        Show workflow mode, branch/worktree state, active features, and next step
   worktree      Create a typed task branch in a dedicated Git worktree

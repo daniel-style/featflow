@@ -1,6 +1,13 @@
 import { existsSync, readFileSync } from "node:fs";
+import os from "node:os";
 import path from "node:path";
 
+import {
+  DEFAULT_AGENT_DOC_CANDIDATES,
+  findManagedAgentDocs,
+  inspectAgentDocBlock,
+  renderAgentWorkflowBlock,
+} from "../agent-docs.mjs";
 import { loadConfig } from "../config.mjs";
 import { commandExists, findGitCommonDir, findRepoRoot, gitConfigGet, localBranchExists } from "../git.mjs";
 import { validateActiveFeaturePlan } from "../plan.mjs";
@@ -10,9 +17,30 @@ const usage = `
 Usage:
   featflow doctor
 
-Checks Git, .featflow.json, feature templates, skill installation, Git hooks,
-and active feature plan health.
+Checks Git, .featflow.json, feature templates, skill installation (repo or global),
+managed AGENTS.md / CLAUDE.md blocks, Git hooks, and active feature plan health.
 `.trim();
+
+function findGlobalSkillPath() {
+  const home = process.env.FEATFLOW_HOME || os.homedir();
+  if (!home) {
+    return null;
+  }
+  const candidates = [
+    path.join(home, ".agents", "skills", "featflow", "SKILL.md"),
+    path.join(home, ".claude", "skills", "featflow", "SKILL.md"),
+    path.join(home, ".codex", "skills", "featflow", "SKILL.md"),
+  ];
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) {
+      const display = candidate.startsWith(home)
+        ? `~${candidate.slice(home.length).replaceAll("\\", "/")}`
+        : candidate;
+      return { fullPath: candidate, display };
+    }
+  }
+  return null;
+}
 
 export async function runDoctor(argv) {
   if (argv.includes("-h") || argv.includes("--help")) {
@@ -37,9 +65,11 @@ export async function runDoctor(argv) {
   try {
     loaded = loadConfig(repoRoot);
     add(
-      loaded.hasConfigFile ? "PASS" : "WARN",
+      loaded.hasConfigFile ? "PASS" : "INFO",
       "Config (.featflow.json)",
-      loaded.hasConfigFile ? `mode=${loaded.config.mode}` : "not found (using defaults; run `featflow init`)",
+      loaded.hasConfigFile
+        ? `mode=${loaded.config.mode}`
+        : "not found (using global defaults; run `featflow init --minimal` to customize)",
     );
   } catch (error) {
     add("FAIL", "Config (.featflow.json)", error instanceof Error ? error.message : String(error));
@@ -50,32 +80,83 @@ export async function runDoctor(argv) {
   const { config } = loaded;
 
   const templatePath = path.join(repoRoot, config.featuresDir, "_template.md");
-  add(
-    existsSync(templatePath) ? "PASS" : "WARN",
-    "Feature template",
-    existsSync(templatePath) ? path.relative(repoRoot, templatePath) : `missing (${config.featuresDir}/_template.md)`,
-  );
+  const hasRepoTemplates =
+    existsSync(templatePath) ||
+    existsSync(path.join(repoRoot, config.featuresDir, "README.md")) ||
+    existsSync(path.join(repoRoot, config.featuresDir, "_program_template.md"));
 
-  const skillPath = path.join(repoRoot, ".agents", "skills", "featflow", "SKILL.md");
-  add(
-    existsSync(skillPath) ? "PASS" : "WARN",
-    "Agent Skill",
-    existsSync(skillPath) ? ".agents/skills/featflow/SKILL.md" : "not installed in repo (run `featflow init` or `npx skills add`)",
-  );
+  if (existsSync(templatePath)) {
+    add("PASS", "Feature template", path.relative(repoRoot, templatePath));
+  } else {
+    add("PASS", "Feature template", "using built-in template (global/minimal mode)");
+  }
 
-  const syncGroups = new Set(["skill", "templates"]);
+  const repoSkillPath = path.join(repoRoot, ".agents", "skills", "featflow", "SKILL.md");
+  const hasRepoSkill = existsSync(repoSkillPath);
+  const globalSkill = hasRepoSkill ? null : findGlobalSkillPath();
+  if (hasRepoSkill) {
+    add("PASS", "Agent Skill", ".agents/skills/featflow/SKILL.md");
+  } else if (globalSkill) {
+    add("PASS", "Agent Skill", `global (${globalSkill.display})`);
+  } else {
+    add(
+      "WARN",
+      "Agent Skill",
+      "not found in repo or global skill dirs (run `npx skills add https://github.com/daniel-style/featflow --skill featflow -g` or `featflow init`)",
+    );
+  }
+
+  const managedAgentDocs = findManagedAgentDocs(repoRoot);
+  if (managedAgentDocs.length > 0) {
+    const renderedBlock = renderAgentWorkflowBlock();
+    const driftedDocs = managedAgentDocs.filter(
+      (rel) => inspectAgentDocBlock(path.resolve(repoRoot, rel), renderedBlock).status !== "up-to-date",
+    );
+    if (driftedDocs.length === 0) {
+      add("PASS", "Agent docs", `${managedAgentDocs.join(", ")} (managed block up to date)`);
+    } else {
+      add("WARN", "Agent docs", `drifted: ${driftedDocs.join(", ")} (run \`featflow sync\`)`);
+    }
+  } else {
+    const existingRawDocs = DEFAULT_AGENT_DOC_CANDIDATES.filter((rel) => existsSync(path.join(repoRoot, rel)));
+    if (existingRawDocs.length > 0) {
+      add(
+        "INFO",
+        "Agent docs",
+        `${existingRawDocs.join(", ")} has no featflow managed block (run \`featflow sync --only agent-docs\`)`,
+      );
+    } else {
+      add("INFO", "Agent docs", "no AGENTS.md/CLAUDE.md managed block (run `featflow sync --only agent-docs` or `featflow init`)");
+    }
+  }
+
+  const syncGroups = new Set();
+  if (hasRepoSkill) {
+    syncGroups.add("skill");
+  }
+  if (hasRepoTemplates) {
+    syncGroups.add("templates");
+  }
   if (existsSync(path.join(repoRoot, ".githooks"))) {
     syncGroups.add("githooks");
   }
-  const syncState = inspectSyncState(repoRoot, config, syncGroups);
-  if (syncState.ok) {
-    add("PASS", "Managed files sync", `${syncState.upToDate.length} files match installed featflow`);
+  if (managedAgentDocs.length > 0) {
+    syncGroups.add("agent-docs");
+  }
+
+  if (syncGroups.size === 0) {
+    add("PASS", "Managed files sync", "zero-footprint mode (no repo-managed files)");
   } else {
-    const issues = [
-      ...syncState.missing.map((item) => `missing ${item.rel}`),
-      ...syncState.drifted.map((item) => `drifted ${item.rel}`),
-    ];
-    add("WARN", "Managed files sync", `${issues.join(", ")} (run \`featflow sync\`)`);
+    const syncState = inspectSyncState(repoRoot, config, syncGroups);
+    if (syncState.ok) {
+      add("PASS", "Managed files sync", `${syncState.upToDate.length} files match installed featflow`);
+    } else {
+      const issues = [
+        ...syncState.missing.map((item) => `missing ${item.rel}`),
+        ...syncState.drifted.map((item) => `drifted ${item.rel}`),
+      ];
+      add("WARN", "Managed files sync", `${issues.join(", ")} (run \`featflow sync\`)`);
+    }
   }
 
   const hooksPath = gitConfigGet("core.hooksPath", repoRoot);

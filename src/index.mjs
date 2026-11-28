@@ -3,3 +3,5 @@ export * from "./git.mjs";
 export * from "./plan.mjs";
 export * from "./policy.mjs";
 export * from "./hooks-core.mjs";
+export * from "./detect.mjs";
+export * from "./agent-docs.mjs";

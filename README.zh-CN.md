@@ -23,8 +23,8 @@
 | 模式 | 目标仓库改动 | 适用场景 |
 | --- | --- | --- |
 | **1. 纯全局零入侵（推荐）** | **0 个文件**（`featflow new --local` 用内置模板写到 `.featflow/features/` 并写入 `.git/info/exclude`；`featflow hooks install --local` 装在 `.git/hooks/`） | 个人项目、Python/Go/Rust 等非 JS 项目、给外部开源项目提 PR |
-| **2. 全局 CLI + 仅 1 份配置** | **仅 1 个 `.featflow.json`**（不动 `package.json`、锁文件与 CI） | 多仓库开发者，或约定开发机统一装 CLI 的团队（类似 `gh` / `codegraph`） |
-| **3. 团队项目内置（`devDependency`）** | `package.json` + `.featflow.json` + 同步的 Skill/模板/`.githooks/` + CI `featflow sync --check` | 多人协作 JS/TS 仓库，希望新人 `pnpm install` 零额外步骤且 CI 强锁版本 |
+| **2. 轻量一键接入（`featflow init --minimal`）** | **`.featflow.json` + `AGENTS.md` 托管块 + 本地 `.git/hooks/`**（不动 `package.json`、不拷模板和 Skill 目录） | 多仓库开发者，全局装一次 CLI 后在任意项目一条命令配齐自动探测配置与工作流规则 |
+| **3. 团队项目内置（`devDependency`）** | `package.json` + `.featflow.json` + `AGENTS.md` 托管块 + 同步的 Skill/模板/`.githooks/` + CI `featflow sync --check` | 多人协作 JS/TS 仓库，希望新人 `pnpm install` 零额外步骤且 CI 强锁版本 |
 
 ---
 
@@ -57,21 +57,26 @@ featflow new oauth-pkce --local
 featflow finish feat/oauth-pkce
 ```
 
-若某个项目需要 `developer-branch` 模式或自定义 `postWorktreeCreate` 钩子，只需在项目根目录放一个 `.featflow.json`，无需动 `package.json` 或 CI。
+想在一个新项目或已有项目里一条命令完成自动探测（主干/保护分支、源码目录、测试命令）、注入 `AGENTS.md` 托管块并启用本地钩子，同时不拷冗余模板、不动 `package.json`？直接运行：
+
+```bash
+featflow init --minimal
+```
 
 ### 方式 B：多人 JS/TS 项目内置锁定版本
 
 ```bash
-npm install -D github:daniel-style/featflow#v0.2.0
+npm install -D github:daniel-style/featflow#v0.2.1
 
-# 初始化（默认 trunk 模式；团队分支模式加 --mode developer-branch）
+# 一键初始化：自动探测分支/源码路径/测试命令，自动注入 AGENTS.md 托管块并启用钩子
+# （TTY 下提供简洁交互向导，developer-branch 模式可当场完成个人分支 setup；脚本/CI 可加 --yes）
 npx featflow init --with-githooks
 
-# 可选：同时生成 Codex 或 Claude Code 的 Agent Hooks 配置
+# 可选：生成或无损合并 Codex / Claude Code 的 Agent Hooks 配置
 npx featflow init --with-codex-hooks --with-claude-hooks
 ```
 
-随后把 [`templates/snippets/AGENTS-workflow.md`](./templates/snippets/AGENTS-workflow.md) 中的精简规则粘贴到项目的 `AGENTS.md` 或 `CLAUDE.md` 中即可。
+`featflow init` 默认会用 `<!-- FEATFLOW_START --> ... <!-- FEATFLOW_END -->` 托管块无损写入项目的 `AGENTS.md` / `CLAUDE.md`（可用 `--no-agent-docs` 跳过），后续升级可通过 `featflow sync` 一键同步。
 
 ---
 
@@ -113,8 +118,8 @@ main (发布分支，受保护)
 | --- | --- |
 | `featflow new <slug>` | 使用项目模板或 `featflow` 内置模板新建 feature（或 `--program`）记录，自动填入时间戳、`owner` 与分支；加 `--local` 存到 `.featflow/features/` 并写入 `.git/info/exclude` 实现零入侵。 |
 | `featflow hooks <install\|uninstall\|status>` | 管理 Git hooks：`--local`（默认）在 `.git/hooks/` 中无损增删托管块，保留已有自定义 hook 且不改仓库文件；`--repo` 生成入库的 `.githooks/`。 |
-| `featflow init` | 生成 `.featflow.json`、`features/` 模板、`.agents/skills/featflow/SKILL.md` 及可选 Git/Agent Hooks。 |
-| `featflow sync` | 从当前安装的 `featflow` 同步更新 Skill、模板与 `.githooks/`，不改动 `.featflow.json` 与已有记录。支持 `--check` 放进 CI 防漂移、`--only skill,templates,githooks` 按需同步。 |
+| `featflow init` | 自动探测主干/保护分支、`productPaths` 与测试命令，无损注入 `AGENTS.md`/`CLAUDE.md` 托管块；支持 `--minimal` 轻量模式（`.featflow.json` + `AGENTS.md` 块 + 本地钩子）、安全合并已有 `.claude/settings.json`/`.codex/config.toml`，以及 TTY 交互引导（`developer-branch` 模式可顺手完成个人分支 setup；加 `--yes` 非交互）。 |
+| `featflow sync` | 从当前安装的 `featflow` 同步更新 Skill、模板、`.githooks/` 与 `AGENTS.md`/`CLAUDE.md` 托管块，不改动 `.featflow.json`、已有记录及托管块外的自定义文档。支持 `--check` 放进 CI 防漂移、`--only skill,templates,githooks,agent-docs` 按需同步。 |
 | `featflow setup [branch]` | 初始化个人开发分支（`developer-branch` 模式）并安全配置 Git hooks。 |
 | `featflow status` | 查看当前模式、分支状态、所有 worktree、进行中/暂停中的 feature 记录和下一步建议。 |
 | `featflow worktree <branch>` | 为任务分支创建独立 worktree，并自动执行 `.featflow.json` 中配置的 `postWorktreeCreate` 命令。 |

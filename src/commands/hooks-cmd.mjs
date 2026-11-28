@@ -2,8 +2,7 @@ import { chmodSync, copyFileSync, existsSync, mkdirSync, readFileSync, unlinkSyn
 import path from "node:path";
 
 import { packageRoot } from "../config.mjs";
-import { fail, findGitCommonDir, findRepoRoot, gitConfigGet } from "../git.mjs";
-import { configureGitHooksSafely } from "./init.mjs";
+import { fail, findGitCommonDir, findRepoRoot, gitConfigGet, gitConfigSet } from "../git.mjs";
 
 const BLOCK_START = "# >>> featflow managed hook >>>";
 const BLOCK_END = "# <<< featflow managed hook <<<";
@@ -52,13 +51,22 @@ Modes:
   --repo              Copy tracked hooks to .githooks/ and safely configure core.hooksPath.
 `.trim();
 
-function stripManagedBlock(content) {
-  const regex = new RegExp(`(?:\\r?\\n)*${escapeRegex(BLOCK_START)}[\\s\\S]*?${escapeRegex(BLOCK_END)}(?:\\r?\\n)?`, "g");
-  return content.replace(regex, "\n").replace(/\n{3,}/g, "\n\n").trimEnd();
+export function configureGitHooksSafely(repoRoot) {
+  const existingHooksPath = gitConfigGet("core.hooksPath", repoRoot);
+  if (!existingHooksPath || existingHooksPath === ".githooks") {
+    gitConfigSet("core.hooksPath", ".githooks", repoRoot);
+    return { configured: true, existingHooksPath: ".githooks" };
+  }
+  return { configured: false, existingHooksPath };
 }
 
 function escapeRegex(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function stripManagedBlock(content) {
+  const regex = new RegExp(`(?:\\r?\\n)*${escapeRegex(BLOCK_START)}[\\s\\S]*?${escapeRegex(BLOCK_END)}(?:\\r?\\n)?`, "g");
+  return content.replace(regex, "\n").replace(/\n{3,}/g, "\n\n").trimEnd();
 }
 
 function hasManagedBlock(filePath) {
@@ -68,7 +76,8 @@ function hasManagedBlock(filePath) {
   return readFileSync(filePath, "utf8").includes(BLOCK_START);
 }
 
-function installLocalHooks(repoRoot) {
+export function installLocalHooks(repoRoot, options = {}) {
+  const quiet = Boolean(options.quiet);
   const commonDir = findGitCommonDir(repoRoot);
   if (!commonDir) {
     fail("Could not resolve .git directory.");
@@ -76,12 +85,14 @@ function installLocalHooks(repoRoot) {
 
   const hooksPath = gitConfigGet("core.hooksPath", repoRoot);
   if (hooksPath) {
-    console.warn(`Warning: core.hooksPath is set to "${hooksPath}", so Git ignores .git/hooks/.`);
-    console.warn("Add these calls to your existing hook manager instead:");
-    console.warn("  pre-commit: featflow policy pre-commit");
-    console.warn("  pre-push:   featflow policy pre-push");
-    console.warn("  post-merge: featflow cleanup --post-merge || true");
-    return;
+    if (!quiet) {
+      console.warn(`Warning: core.hooksPath is set to "${hooksPath}", so Git ignores .git/hooks/.`);
+      console.warn("Add these calls to your existing hook manager instead:");
+      console.warn("  pre-commit: featflow policy pre-commit");
+      console.warn("  pre-push:   featflow policy pre-push");
+      console.warn("  post-merge: featflow cleanup --post-merge || true");
+    }
+    return { installed: false, existingHooksPath: hooksPath, hooks: [], hooksDir: "" };
   }
 
   const hooksDir = path.join(commonDir, "hooks");
@@ -104,8 +115,12 @@ function installLocalHooks(repoRoot) {
     installed.push(hookName);
   }
 
-  console.log(`Installed local featflow Git hooks in ${hooksDir}: ${installed.join(", ")}`);
-  console.log("Zero repository files were modified (existing custom hooks were preserved).");
+  if (!quiet) {
+    console.log(`Installed local featflow Git hooks in ${hooksDir}: ${installed.join(", ")}`);
+    console.log("Zero repository files were modified (existing custom hooks were preserved).");
+  }
+
+  return { installed: true, existingHooksPath: "", hooks: installed, hooksDir };
 }
 
 function uninstallLocalHooks(repoRoot) {

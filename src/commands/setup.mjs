@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import path from "node:path";
-import { createInterface } from "node:readline/promises";
+import { createInterface } from "node:readline";
 
 import { loadConfig } from "../config.mjs";
 import {
@@ -13,7 +13,7 @@ import {
   runWrite,
   validateDeveloperBranchName,
 } from "../git.mjs";
-import { configureGitHooksSafely } from "./init.mjs";
+import { configureGitHooksSafely } from "./hooks-cmd.mjs";
 
 const usage = `
 Usage:
@@ -87,7 +87,7 @@ function ensureDeveloperBranch(repoRoot, branchName, remote, config, localOnly) 
 
   if (hasRemote) {
     if (!remoteBranchExists(remote, integration, repoRoot)) {
-      fail(
+      throw new Error(
         [
           `Integration branch ${remoteIntegration} does not exist yet.`,
           `Create or push ${integration} first, or pass --local-only for offline setup.`,
@@ -114,7 +114,7 @@ function ensureDeveloperBranch(repoRoot, branchName, remote, config, localOnly) 
   }
 
   if (config.requireRemote && !localOnly) {
-    fail(`Remote "${remote}" is not configured. Add a remote or pass --local-only.`);
+    throw new Error(`Remote "${remote}" is not configured. Add a remote or pass --local-only.`);
   }
 
   if (!localBranchExists(branchName, repoRoot)) {
@@ -126,7 +126,7 @@ function ensureDeveloperBranch(repoRoot, branchName, remote, config, localOnly) 
   return "using existing local developer branch";
 }
 
-function suggestDeveloperBranch(repoRoot, config, protectedBranches) {
+export function suggestDeveloperBranch(repoRoot, config, protectedBranches) {
   const existing = gitConfigGet(config.developerBranchConfigKey, repoRoot);
   if (existing && !protectedBranches.has(existing)) {
     return existing;
@@ -143,16 +143,60 @@ function suggestDeveloperBranch(repoRoot, config, protectedBranches) {
   return "";
 }
 
-async function resolveDeveloperBranch(options, repoRoot, config, protectedBranches) {
+export function createPromptReader() {
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  const queuedLines = [];
+  const waiters = [];
+  let closed = false;
+
+  rl.on("line", (line) => {
+    if (waiters.length > 0) {
+      const resolve = waiters.shift();
+      resolve(line);
+    } else {
+      queuedLines.push(line);
+    }
+  });
+
+  rl.on("close", () => {
+    closed = true;
+    while (waiters.length > 0) {
+      const resolve = waiters.shift();
+      resolve("");
+    }
+  });
+
+  return {
+    async question(promptText) {
+      process.stdout.write(promptText);
+      if (queuedLines.length > 0) {
+        return queuedLines.shift();
+      }
+      if (closed) {
+        return "";
+      }
+      return new Promise((resolve) => {
+        waiters.push(resolve);
+      });
+    },
+    close() {
+      rl.close();
+    },
+  };
+}
+
+async function resolveDeveloperBranch(options, repoRoot, config, protectedBranches, sharedRl = null) {
   if (options.branch) {
     return options.branch;
   }
   const suggested = suggestDeveloperBranch(repoRoot, config, protectedBranches);
   const isInteractive =
-    Boolean(process.stdin.isTTY && process.stdout.isTTY) || process.env.FEATFLOW_FORCE_TTY === "1";
+    Boolean(sharedRl) ||
+    Boolean(process.stdin.isTTY && process.stdout.isTTY) ||
+    process.env.FEATFLOW_FORCE_TTY === "1";
 
   if (isInteractive) {
-    const rl = createInterface({ input: process.stdin, output: process.stdout });
+    const rl = sharedRl ?? createPromptReader();
     try {
       const promptLabel = suggested
         ? `Personal developer branch name [${suggested}]: `
@@ -160,35 +204,53 @@ async function resolveDeveloperBranch(options, repoRoot, config, protectedBranch
       const answer = (await rl.question(promptLabel)).trim();
       const chosen = answer || suggested;
       if (!chosen) {
-        fail("Developer branch name is required in developer-branch mode (e.g. `featflow setup alice`).", usage);
+        throw new Error("Developer branch name is required in developer-branch mode (e.g. `featflow setup alice`).");
       }
       return chosen;
     } finally {
-      rl.close();
+      if (!sharedRl) {
+        rl.close();
+      }
     }
   }
 
   const example = suggested || "alice";
-  fail(`Developer branch name is required in developer-branch mode (e.g. \`featflow setup ${example}\`).`, usage);
+  throw new Error(`Developer branch name is required in developer-branch mode (e.g. \`featflow setup ${example}\`).`);
+}
+
+export async function setupDeveloperBranchWorkflow(repoRoot, config, options = {}) {
+  const remote = options.remote || config.remote;
+  const protectedBranches = new Set(config.protectedBranches);
+  const branch = await resolveDeveloperBranch(
+    { branch: options.branch ?? "" },
+    repoRoot,
+    config,
+    protectedBranches,
+    options.rl ?? null,
+  );
+  validateDeveloperBranchName(branch, repoRoot, protectedBranches);
+
+  const result = ensureDeveloperBranch(repoRoot, branch, remote, config, Boolean(options.localOnly));
+  gitConfigSet(config.developerBranchConfigKey, branch, repoRoot);
+  return { branch, result };
 }
 
 export async function runSetup(argv) {
   const options = parseArgs(argv);
   const { config, repoRoot } = loadConfig(process.cwd());
-  const remote = options.remote || config.remote;
 
   if (config.mode === "developer-branch") {
-    const protectedBranches = new Set(config.protectedBranches);
-    options.branch = await resolveDeveloperBranch(options, repoRoot, config, protectedBranches);
     try {
-      validateDeveloperBranchName(options.branch, repoRoot, protectedBranches);
+      const setupResult = await setupDeveloperBranchWorkflow(repoRoot, config, {
+        branch: options.branch,
+        remote: options.remote,
+        localOnly: options.localOnly,
+      });
+      options.branch = setupResult.branch;
+      console.log(`Developer branch configured: ${setupResult.branch} (${setupResult.result})`);
     } catch (error) {
-      fail(error instanceof Error ? error.message : String(error));
+      fail(error instanceof Error ? error.message : String(error), usage);
     }
-
-    const result = ensureDeveloperBranch(repoRoot, options.branch, remote, config, options.localOnly);
-    gitConfigSet(config.developerBranchConfigKey, options.branch, repoRoot);
-    console.log(`Developer branch configured: ${options.branch} (${result})`);
   } else {
     if (!localBranchExists(config.baseBranch, repoRoot)) {
       console.log(`Note: configured baseBranch "${config.baseBranch}" does not exist locally yet.`);

@@ -15,7 +15,7 @@
 
 ### Feature Planning Workflow
 
-- For substantial features, cross-module changes, long-running tasks, or multi-phase initiatives, read and follow `.agents/skills/featflow/SKILL.md`.
-- Draft complete `Feature Brief` and `Plan Details` (including `Pre-Implementation Approval`) in `features/active/YYYY-MM-DD-HHMM-short-kebab-title.md` before editing product code, and verify with `featflow plan-check`.
-- Move completed records to `features/done/` before committing and running `featflow finish <branch>`.
-- Tiny one-off edits do not require a `features/` record, but still follow the Universal Pre-Implementation Gate and dedicated task worktree flow.
+- For substantial features, cross-module changes, long-running tasks, or multi-phase initiatives, read and follow the `featflow` skill (`.agents/skills/featflow/SKILL.md` or your globally installed skill).
+- Draft complete `Feature Brief` and `Plan Details` (including `Pre-Implementation Approval`) via `featflow new <short-kebab-title>` (or `featflow new <short-kebab-title> --local` when feature records are not tracked in Git) before editing product code, and verify with `featflow plan-check`.
+- Move completed records to `done/` before committing and running `featflow finish <branch>`.
+- Tiny one-off edits do not require a feature record, but still follow the Universal Pre-Implementation Gate and dedicated task worktree flow.
