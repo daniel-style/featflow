@@ -34,7 +34,7 @@ Install `featflow` **once globally** and adapt its footprint per repository — 
 
 ```bash
 # 1. Install the CLI globally once
-npm install -g github:daniel-style/featflow#v0.2.0
+npm install -g github:daniel-style/featflow#v0.3.0
 
 # 2. Install the Agent Skill globally once (Codex, Claude Code, Cursor, Antigravity)
 npx skills add https://github.com/daniel-style/featflow --skill featflow -g
@@ -66,7 +66,7 @@ featflow init --minimal
 ### Option B — Embed in a Team JS/TS Repository
 
 ```bash
-npm install -D github:daniel-style/featflow#v0.2.1
+npm install -D github:daniel-style/featflow#v0.3.0
 
 # One-command onboarding: auto-detects branches/paths/tests, injects AGENTS.md block, sets up hooks
 # (Interactive on TTY; add --yes for scripts/CI; pass --mode developer-branch for team branch topology)

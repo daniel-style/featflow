@@ -34,7 +34,7 @@
 
 ```bash
 # 1. 本机全局安装一次 CLI
-npm install -g github:daniel-style/featflow#v0.2.0
+npm install -g github:daniel-style/featflow#v0.3.0
 
 # 2. 本机全局安装一次 Agent Skill（Codex / Claude Code / Cursor / Antigravity 自动识别）
 npx skills add https://github.com/daniel-style/featflow --skill featflow -g
@@ -66,7 +66,7 @@ featflow init --minimal
 ### 方式 B：多人 JS/TS 项目内置锁定版本
 
 ```bash
-npm install -D github:daniel-style/featflow#v0.2.1
+npm install -D github:daniel-style/featflow#v0.3.0
 
 # 一键初始化：自动探测分支/源码路径/测试命令，自动注入 AGENTS.md 托管块并启用钩子
 # （TTY 下提供简洁交互向导，developer-branch 模式可当场完成个人分支 setup；脚本/CI 可加 --yes）
