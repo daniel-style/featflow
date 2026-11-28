@@ -7,7 +7,7 @@
   "author": "Daniel",
   "repository": {
     "type": "git",
-    "url": "https://github.com/daniel-style/featflow.git"
+    "url": "git+https://github.com/daniel-style/featflow.git"
   },
   "homepage": "https://github.com/daniel-style/featflow#readme",
   "bugs": {
@@ -29,8 +29,11 @@
   "engines": {
     "node": ">=20.0.0"
   },
+  "publishConfig": {
+    "access": "public"
+  },
   "bin": {
-    "featflow": "./bin/featflow.mjs"
+    "featflow": "bin/featflow.mjs"
   },
   "exports": {
     ".": "./src/index.mjs",

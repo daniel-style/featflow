@@ -33,8 +33,8 @@ Install `featflow` **once globally** and adapt its footprint per repository — 
 ### Option A — Global Install (Recommended, works across all repos & languages)
 
 ```bash
-# 1. Install the CLI globally once
-npm install -g github:daniel-style/featflow#v0.6.3
+# 1. Install the CLI globally once (or pin via GitHub tag: github:daniel-style/featflow#v0.6.3)
+npm install -g featflow
 
 # 2. Install the Agent Skill globally once (Codex, Claude Code, Cursor, Antigravity)
 npx skills add https://github.com/daniel-style/featflow --skill featflow -g
@@ -66,7 +66,7 @@ featflow init --minimal
 ### Option B — Embed in a Team JS/TS Repository
 
 ```bash
-npm install -D github:daniel-style/featflow#v0.6.3
+npm install -D featflow
 
 # Interactive wizard with checkbox multi-select (workflow guardrails + AI agent hooks):
 npx featflow init
