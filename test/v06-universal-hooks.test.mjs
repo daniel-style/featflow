@@ -427,5 +427,31 @@ describe("featflow v0.6 universal hooks, pre-commit size guard, preset full, --m
     } finally {
       rmSync(numSelectFixture.parent, { force: true, recursive: true });
     }
+
+    // 6. Default full interactive init pre-checks all 4 workflow guardrails & modules on Enter
+    const defaultCapsFixture = createRepo("tty-default-all-caps");
+    try {
+      const { repo } = defaultCapsFixture;
+      // 1. profile -> Enter (full)
+      // 2. mode -> Enter (trunk)
+      // 3. finish target -> Enter (merge)
+      // 4. git hooks -> none
+      // 5. workflow guardrails -> Enter (all 4 pre-checked!)
+      // 6. issues assetsRepo -> Enter (skip)
+      // 7. AI coding agent hooks -> Enter (none)
+      const res = run(process.execPath, [CLI, "init"], repo, {
+        env: { FEATFLOW_FORCE_TTY: "1" },
+        input: "\n\n\nnone\n\n\n\n",
+      });
+      assert.equal(res.status, 0, res.stderr);
+      const cfg = JSON.parse(readFileSync(path.join(repo, ".featflow.json"), "utf8"));
+      assert.ok(cfg.fileSizeBudget);
+      assert.ok(cfg.regression);
+      assert.ok(cfg.issues);
+      assert.equal(existsSync(path.join(repo, ".codex", "agents", "codebase-locator.toml")), true);
+      assert.equal(existsSync(path.join(repo, "context", "regression-ledger.yml")), true);
+    } finally {
+      rmSync(defaultCapsFixture.parent, { force: true, recursive: true });
+    }
   });
 });

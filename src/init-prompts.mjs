@@ -105,6 +105,7 @@ export async function promptInteractiveOptions(prompter, options, detected, repo
   }
 
   if (!options.minimal && !options.capabilitiesExplicit) {
+    const defaultCheckAll = !options.merge || options.preset === "full";
     const selectedCaps = await promptMultiSelect(prompter, {
       title: "Workflow guardrails & modules",
       choices: [
@@ -112,25 +113,25 @@ export async function promptInteractiveOptions(prompter, options, detected, repo
           id: "size-budget",
           label: "File-size budget",
           detail: "600 prod / 700 style / 900 test + pre-commit",
-          checked: Boolean(options.withSizeBudget || options.preset === "full" || existingConfig?.fileSizeBudget),
+          checked: Boolean(defaultCheckAll || options.withSizeBudget || existingConfig?.fileSizeBudget),
         },
         {
           id: "regression",
           label: "Regression Guardian",
           detail: "regression-ledger.yml + impact check + Skill",
-          checked: Boolean(options.withRegression || options.preset === "full" || existingConfig?.regression),
+          checked: Boolean(defaultCheckAll || options.withRegression || existingConfig?.regression),
         },
         {
           id: "issues",
           label: "GitHub Issues loop",
           detail: "featflow issue CLI + featflow-issues Skill",
-          checked: Boolean(options.withIssues || options.preset === "full" || existingConfig?.issues),
+          checked: Boolean(defaultCheckAll || options.withIssues || existingConfig?.issues),
         },
         {
           id: "codex-agents",
           label: "Codex subagents",
           detail: ".codex/agents/*.toml read-only templates",
-          checked: Boolean(options.withCodexAgents || options.preset === "full"),
+          checked: Boolean(defaultCheckAll || options.withCodexAgents),
         },
       ],
     });
