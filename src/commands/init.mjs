@@ -22,12 +22,11 @@ import {
   installCodexHooks,
   installCursorHooks,
   installInitialRegressionLedger,
-  parseYesNo,
   writeTextFile,
 } from "../init-hooks.mjs";
 import { promptInteractiveOptions } from "../init-prompts.mjs";
 import { evaluateFileSizeBudget, updateFileSizeBaseline } from "../size-check.mjs";
-import { createSmartPrompter } from "../tui-select.mjs";
+import { createSmartPrompter, promptSingleSelect } from "../tui-select.mjs";
 import { configureGitHooksSafely, installLocalHooks } from "./hooks-cmd.mjs";
 import { setupDeveloperBranchWorkflow } from "./setup.mjs";
 
@@ -305,8 +304,15 @@ export async function runInit(argv) {
     if (!options.merge && config.mode === "developer-branch") {
       let shouldRunSetup = Boolean(options.developerBranch);
       if (!shouldRunSetup && prompter) {
-        const answer = await prompter.question("Set up your personal developer branch now? [Y/n]: ");
-        shouldRunSetup = parseYesNo(answer, true);
+        const answer = await promptSingleSelect(prompter, {
+          title: "Set up your personal developer branch now?",
+          defaultId: "yes",
+          choices: [
+            { id: "yes", label: "Yes", detail: "create/track your personal developer branch now", aliases: ["y", "true"] },
+            { id: "no", label: "No", detail: "skip for now (run `featflow setup <name>` later)", aliases: ["n", "false"] },
+          ],
+        });
+        shouldRunSetup = answer === "yes";
       }
       if (shouldRunSetup) {
         try {

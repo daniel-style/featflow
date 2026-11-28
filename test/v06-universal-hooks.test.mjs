@@ -6,7 +6,7 @@ import path from "node:path";
 import { describe, it } from "node:test";
 
 import { packageRoot } from "../src/config.mjs";
-import { parseMultiSelectInput } from "../src/tui-select.mjs";
+import { parseMultiSelectInput, parseSingleSelectInput } from "../src/tui-select.mjs";
 
 const CLI = path.join(packageRoot, "bin", "featflow.mjs");
 const emptyGitConfig = process.platform === "win32" ? "NUL" : "/dev/null";
@@ -260,7 +260,16 @@ describe("featflow v0.6 universal hooks, pre-commit size guard, preset full, --m
   });
 
   it("supports one-command --preset full, non-destructive --merge with auto-baseline, and interactive multi-select", () => {
-    // 1. Unit check parseMultiSelectInput
+    // 1. Unit check parseSingleSelectInput & parseMultiSelectInput
+    const modeChoices = [
+      { id: "trunk", label: "trunk", aliases: ["t"] },
+      { id: "developer-branch", label: "developer-branch", aliases: ["dev", "d"] },
+    ];
+    assert.equal(parseSingleSelectInput("", modeChoices, "trunk"), "trunk");
+    assert.equal(parseSingleSelectInput("2", modeChoices, "trunk"), "developer-branch");
+    assert.equal(parseSingleSelectInput("dev", modeChoices, "trunk"), "developer-branch");
+    assert.equal(parseSingleSelectInput("developer-branch", modeChoices, "trunk"), "developer-branch");
+
     const choices = [
       { id: "antigravity", label: "Antigravity", checked: false },
       { id: "claude-code", label: "Claude Code", checked: true },
@@ -390,6 +399,33 @@ describe("featflow v0.6 universal hooks, pre-commit size guard, preset full, --m
       assert.equal(existsSync(path.join(repo, ".codex", "config.toml")), false);
     } finally {
       rmSync(ttyFixture.parent, { force: true, recursive: true });
+    }
+
+    // 5. Interactive single-select by number picks developer-branch without typing full branch mode name
+    const numSelectFixture = createRepo("tty-single-select");
+    try {
+      const { repo } = numSelectFixture;
+      // 1. Setup profile -> "1" (full)
+      // 2. Branch mode -> "2" (developer-branch)
+      // 3. Git hooks -> "2" (local)
+      // 4. Workflow capabilities -> "1" (size-budget)
+      // 5. AI Coding Agent Hooks -> "1" (antigravity)
+      // 6. Set up personal developer branch now? -> "2" (No)
+      const res = run(process.execPath, [CLI, "init"], repo, {
+        env: { FEATFLOW_FORCE_TTY: "1" },
+        input: "1\n2\n2\n1\n1\n2\n",
+      });
+      assert.equal(res.status, 0, res.stderr);
+      assert.match(res.stdout, /Setup profile:/);
+      assert.match(res.stdout, /Branch mode:/);
+      assert.match(res.stdout, /Git hooks:/);
+      const cfg = JSON.parse(readFileSync(path.join(repo, ".featflow.json"), "utf8"));
+      assert.equal(cfg.mode, "developer-branch");
+      assert.ok(cfg.fileSizeBudget);
+      assert.equal(existsSync(path.join(repo, ".agents", "hooks.json")), true);
+      assert.equal(existsSync(path.join(repo, ".git", "hooks", "pre-commit")), true);
+    } finally {
+      rmSync(numSelectFixture.parent, { force: true, recursive: true });
     }
   });
 });
