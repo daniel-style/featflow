@@ -4,6 +4,8 @@ export * from "./changed-files.mjs";
 export * from "./plan.mjs";
 export * from "./policy.mjs";
 export * from "./hooks-core.mjs";
+export * from "./hook-adapters.mjs";
+export * from "./tui-select.mjs";
 export * from "./detect.mjs";
 export * from "./agent-docs.mjs";
 export * from "./issues.mjs";

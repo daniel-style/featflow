@@ -50,7 +50,7 @@ Commands:
   pr-cleanup    Sync base branch and clean up local worktree/branch after a GitHub PR merge
   plan-check    Validate that the active feature record has complete, approved Plan Details
   policy        Run Git hook guards (pre-commit | pre-push)
-  hook          Run AI coding-agent hook adapters (codex | claude-code)
+  hook          Run AI coding-agent hook adapters (antigravity | claude-code | codex | cursor)
   doctor        Check repository configuration, hooks, templates, and active feature health
 
 Global Options:

@@ -1,20 +1,22 @@
 import { loadConfig } from "../config.mjs";
 import { fail } from "../git.mjs";
 import {
-  evaluatePostToolUse,
-  evaluatePreToolUse,
-  evaluateStopGate,
-  evaluateUserPrompt,
-  normalizeHookPayload,
-} from "../hooks-core.mjs";
+  dispatchHookAdapter,
+  resolveHookCwd,
+  SUPPORTED_HOOK_ADAPTERS,
+  SUPPORTED_HOOK_EVENTS,
+} from "../hook-adapters.mjs";
 
 const usage = `
 Usage:
-  featflow hook <codex|claude-code> <pre-tool-use|post-tool-use|user-prompt|stop>
+  featflow hook <codex|claude-code|antigravity|cursor> <event>
 
-Reads hook JSON from stdin and emits the adapter-appropriate response and exit code:
-  - Exit 0: allow (and optional JSON stdout for user-prompt)
-  - Exit 2: block with stderr message (for pre-tool-use, post-tool-use, and stop)
+Supported events:
+  codex / claude-code: pre-tool-use | post-tool-use | user-prompt | stop
+  antigravity:         pre-invocation | pre-tool-use | post-tool-use | stop
+  cursor:              before-submit-prompt | pre-tool-use | post-tool-use | stop
+
+Reads hook JSON from stdin and emits the adapter-appropriate response and exit code.
 `.trim();
 
 async function readStdinJson() {
@@ -40,58 +42,37 @@ export async function runHook(argv) {
     return;
   }
 
-  if (!["codex", "claude-code"].includes(adapter)) {
-    fail(`Unsupported hook adapter "${adapter}". Expected "codex" or "claude-code".`, usage);
-  }
-  if (!["pre-tool-use", "post-tool-use", "user-prompt", "stop"].includes(event ?? "")) {
+  if (!SUPPORTED_HOOK_ADAPTERS.includes(adapter)) {
     fail(
-      `Unsupported hook event "${event ?? ""}". Expected "pre-tool-use", "post-tool-use", "user-prompt", or "stop".`,
+      `Unsupported hook adapter "${adapter}". Expected one of: ${SUPPORTED_HOOK_ADAPTERS.join(", ")}.`,
+      usage,
+    );
+  }
+  const validEvents = SUPPORTED_HOOK_EVENTS[adapter] ?? [];
+  if (!validEvents.includes(event ?? "")) {
+    fail(
+      `Unsupported hook event "${event ?? ""}" for adapter "${adapter}". Expected one of: ${validEvents.join(", ")}.`,
       usage,
     );
   }
 
   const rawInput = await readStdinJson();
-  const { config, repoRoot } = loadConfig(process.cwd());
-  const payload = normalizeHookPayload(adapter, rawInput);
+  const startCwd = resolveHookCwd(rawInput, process.cwd());
+  const { config, repoRoot } = loadConfig(startCwd);
 
-  if (event === "pre-tool-use") {
-    const result = evaluatePreToolUse(repoRoot, config, payload, process.env);
-    if (result.decision === "block") {
-      process.stderr.write(`${result.message}\n`);
-      process.exit(2);
-    }
-    return;
+  const outcome = dispatchHookAdapter(adapter, event, rawInput, {
+    repoRoot,
+    config,
+    env: process.env,
+  });
+
+  if (outcome.stdout) {
+    process.stdout.write(outcome.stdout);
   }
-
-  if (event === "post-tool-use") {
-    const result = evaluatePostToolUse(repoRoot, config, payload, process.env);
-    if (result.decision === "block") {
-      process.stderr.write(`${result.message}\n`);
-      process.exit(2);
-    }
-    return;
+  if (outcome.stderr) {
+    process.stderr.write(outcome.stderr);
   }
-
-  if (event === "user-prompt") {
-    const result = evaluateUserPrompt(config, payload);
-    if (result.additionalContext) {
-      process.stdout.write(
-        `${JSON.stringify({
-          hookSpecificOutput: {
-            hookEventName: "UserPromptSubmit",
-            additionalContext: result.additionalContext,
-          },
-        })}\n`,
-      );
-    }
-    return;
-  }
-
-  if (event === "stop") {
-    const result = evaluateStopGate(repoRoot, config, process.env);
-    if (result.decision === "block") {
-      process.stderr.write(`${result.message}\n`);
-      process.exit(2);
-    }
+  if (outcome.exitCode && outcome.exitCode !== 0) {
+    process.exit(outcome.exitCode);
   }
 }

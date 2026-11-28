@@ -271,10 +271,14 @@ export function detectRepoEnvironment(repoRoot, options = {}) {
     suggestions: verifyInfo.suggestions,
     featuresDirConflict,
     existingHooksPath: gitConfigGet("core.hooksPath", repoRoot),
+    hasAgentsDir: existsSync(path.join(repoRoot, ".agents")),
+    hasAntigravityHooks: existsSync(path.join(repoRoot, ".agents", "hooks.json")),
     hasClaudeConfig: existsSync(path.join(repoRoot, ".claude", "settings.json")),
     hasClaudeDir: existsSync(path.join(repoRoot, ".claude")),
     hasCodexConfig: existsSync(path.join(repoRoot, ".codex", "config.toml")),
     hasCodexDir: existsSync(path.join(repoRoot, ".codex")),
+    hasCursorHooks: existsSync(path.join(repoRoot, ".cursor", "hooks.json")),
+    hasCursorDir: existsSync(path.join(repoRoot, ".cursor")),
     hasCodegraph: existsSync(path.join(repoRoot, ".codegraph")),
   };
 }

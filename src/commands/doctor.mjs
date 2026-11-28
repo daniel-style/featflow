@@ -142,10 +142,11 @@ export async function runDoctor(argv) {
     add("PASS", "Issues workflow", `enabled (${config.issues.provider}${assetsDetail})`);
   }
   if (config.fileSizeBudget) {
+    const preCommitTag = config.fileSizeBudget.enforceInPreCommit ? ", pre-commit=on" : "";
     add(
       "PASS",
       "File size budget",
-      `enabled (prod=${config.fileSizeBudget.production}, style=${config.fileSizeBudget.style}, test=${config.fileSizeBudget.test})`,
+      `enabled (prod=${config.fileSizeBudget.production}, style=${config.fileSizeBudget.style}, test=${config.fileSizeBudget.test}${preCommitTag})`,
     );
   }
   if (config.regression) {
@@ -155,6 +156,17 @@ export async function runDoctor(argv) {
       "Regression ledger",
       ledgerExists ? config.regression.ledgerFile : `configured "${config.regression.ledgerFile}" not found`,
     );
+  }
+
+  const configuredAgentHooks = [];
+  if (existsSync(path.join(repoRoot, ".agents", "hooks.json"))) configuredAgentHooks.push("antigravity");
+  if (existsSync(path.join(repoRoot, ".claude", "settings.json"))) configuredAgentHooks.push("claude-code");
+  if (existsSync(path.join(repoRoot, ".codex", "config.toml"))) configuredAgentHooks.push("codex");
+  if (existsSync(path.join(repoRoot, ".cursor", "hooks.json"))) configuredAgentHooks.push("cursor");
+  if (configuredAgentHooks.length > 0) {
+    add("PASS", "AI Agent hooks", configuredAgentHooks.join(", "));
+  } else {
+    add("INFO", "AI Agent hooks", "none installed (run `featflow init --merge --with-all-hooks` or interactive `featflow init --merge`)");
   }
 
   const cg = inspectCodegraphState(repoRoot);

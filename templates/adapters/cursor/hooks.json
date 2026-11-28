@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "hooks": {
+    "beforeSubmitPrompt": [
+      {
+        "command": "featflow hook cursor before-submit-prompt"
+      }
+    ],
+    "preToolUse": [
+      {
+        "command": "featflow hook cursor pre-tool-use",
+        "matcher": "Shell|Write|StrReplace|Edit|MultiEdit|Bash"
+      }
+    ],
+    "postToolUse": [
+      {
+        "command": "featflow hook cursor post-tool-use",
+        "matcher": "Write|StrReplace|Edit|MultiEdit"
+      }
+    ],
+    "stop": [
+      {
+        "command": "featflow hook cursor stop"
+      }
+    ]
+  }
+}

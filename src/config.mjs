@@ -40,6 +40,7 @@ export const DEFAULT_FILE_SIZE_BUDGET = {
   baselineFile: ".featflow-size-baseline.json",
   enforceInPostToolUse: true,
   enforceInStopGate: true,
+  enforceInPreCommit: true,
 };
 
 export const DEFAULT_REGRESSION_CONFIG = {
@@ -181,6 +182,7 @@ export function normalizeFileSizeBudget(rawBudget) {
     baselineFile,
     enforceInPostToolUse: rawBudget.enforceInPostToolUse !== false,
     enforceInStopGate: rawBudget.enforceInStopGate !== false,
+    enforceInPreCommit: rawBudget.enforceInPreCommit !== false,
   };
 }
 

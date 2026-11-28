@@ -1,0 +1,23 @@
+# Regression Memory Ledger (managed by featflow)
+#
+# Record durable bug invariants, affected file paths/globs, and regression guard
+# tests here so future changes automatically run impacted guards via:
+#   featflow regression impact
+#   featflow regression check
+#   featflow regression validate --strict
+#
+# Example entry (uncomment and customize when adding your first bug guard):
+# - id: example-regression-id
+#   title: Short summary of the bug class that must not recur
+#   status: guarded
+#   surfaces: [core]
+#   symptom: What broke from the user's perspective.
+#   root_cause: Why the failure happened.
+#   invariant: The behavioral invariant that must always hold.
+#   files:
+#     - src/example.ts
+#   guards:
+#     - tests/example.test.ts
+#   commands:
+#     - npm test
+#   owner_notes: Extra context for future refactors.

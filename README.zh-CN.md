@@ -34,7 +34,7 @@
 
 ```bash
 # 1. 本机全局安装一次 CLI
-npm install -g github:daniel-style/featflow#v0.3.1
+npm install -g github:daniel-style/featflow#v0.6.0
 
 # 2. 本机全局安装一次 Agent Skill（Codex / Claude Code / Cursor / Antigravity 自动识别）
 npx skills add https://github.com/daniel-style/featflow --skill featflow -g
@@ -66,14 +66,16 @@ featflow init --minimal
 ### 方式 B：多人 JS/TS 项目内置锁定版本
 
 ```bash
-npm install -D github:daniel-style/featflow#v0.3.1
+npm install -D github:daniel-style/featflow#v0.6.0
 
-# 一键初始化：自动探测分支/源码路径/测试命令，自动注入 AGENTS.md 托管块并启用钩子
-# （TTY 下提供简洁交互向导，developer-branch 模式可当场完成个人分支 setup；脚本/CI 可加 --yes）
-npx featflow init --with-githooks
+# 交互式初始化向导：TTY 下带多选勾选框，手动勾选护栏模块和要安装的 Agent Hooks
+npx featflow init
 
-# 可选：生成或无损合并 Codex / Claude Code 的 Agent Hooks 配置
-npx featflow init --with-codex-hooks --with-claude-hooks
+# 或者一条命令直接开启全家桶（600 行代码限制 + pre-commit 兜底 + 回归守卫 + Issues 闭环 + 四大 Agent Hooks）：
+npx featflow init --preset full --yes
+
+# 已有项目无损升级（保留原配置，只增量合并新 hooks / 回归账本 / 自动生成历史行数基线）：
+npx featflow init --merge --with-all-hooks --with-regression
 ```
 
 `featflow init` 默认会用 `<!-- FEATFLOW_START --> ... <!-- FEATFLOW_END -->` 托管块无损写入项目的 `AGENTS.md` / `CLAUDE.md`（可用 `--no-agent-docs` 跳过），后续升级可通过 `featflow sync` 一键同步。
@@ -118,7 +120,7 @@ main (发布分支，受保护)
 | --- | --- |
 | `featflow new <slug>` | 使用项目模板或 `featflow` 内置模板新建 feature（或 `--program`）记录，自动填入时间戳、`owner` 与分支；加 `--local` 存到 `.featflow/features/` 并写入 `.git/info/exclude` 实现零入侵。 |
 | `featflow hooks <install\|uninstall\|status>` | 管理 Git hooks：`--local`（默认）在 `.git/hooks/` 中无损增删托管块，保留已有自定义 hook 且不改仓库文件；`--repo` 生成入库的 `.githooks/`。 |
-| `featflow init` | 自动探测主干/保护分支、`productPaths` 与测试命令，无损注入 `AGENTS.md`/`CLAUDE.md` 托管块；支持 `--minimal` 轻量模式（`.featflow.json` + `AGENTS.md` 块 + 本地钩子）、安全合并已有 `.claude/settings.json`/`.codex/config.toml`，以及 TTY 交互引导（`developer-branch` 模式可顺手完成个人分支 setup；加 `--yes` 非交互）。 |
+| `featflow init` | 自动探测项目配置、无损注入 `AGENTS.md`/`CLAUDE.md` 托管块，并在 TTY 下提供方向键/空格多选勾选框让用户勾选护栏模块和四大 Agent Hooks。支持 `--preset full`（一键全家桶）、`--minimal`、`--merge`（老项目无损增量升级并自动生成历史行数基线）、`--agent-hooks <antigravity,claude-code,codex,cursor\|all\|none>` 与 `--yes`。 |
 | `featflow sync` | 从当前安装的 `featflow` 同步更新 Skill、模板、`.githooks/` 与 `AGENTS.md`/`CLAUDE.md` 托管块，不改动 `.featflow.json`、已有记录及托管块外的自定义文档。支持 `--check` 放进 CI 防漂移、`--only skill,templates,githooks,agent-docs` 按需同步。 |
 | `featflow setup [branch]` | 初始化个人开发分支（`developer-branch` 模式）并安全配置 Git hooks。 |
 | `featflow status` | 查看当前模式、分支状态、所有 worktree、进行中/暂停中的 feature 记录和下一步建议。 |
@@ -132,8 +134,8 @@ main (发布分支，受保护)
 | `featflow cleanup` | 清理已合入目标分支且工作区干净的本地任务分支与 worktree（也挂在 `post-merge` 钩子自动执行）。 |
 | `featflow pr-cleanup <pr>` | GitHub PR 合并后（依赖 `gh` CLI）同步目标基线分支、删除干净 worktree 与本地/远端分支并 prune。 |
 | `featflow plan-check [path]` | 校验当前 active feature 记录的 `Plan Details` 章节完整度、占位符清理与审批状态。 |
-| `featflow policy <pre-commit\|pre-push>` | Git hooks 保护分支拦截（一次性初始化可用 `FEATFLOW_BOOTSTRAP=1` 放行）。 |
-| `featflow hook <codex\|claude-code> <event>` | 面向 Codex 与 Claude Code 的 `pre-tool-use` / `user-prompt` / `stop` Hook 适配器。 |
+| `featflow policy <pre-commit\|pre-push>` | Git hooks 护栏：拦截保护分支直提交/直推送，以及 `enforceInPreCommit: true` 时拦截超出 `fileSizeBudget` 的暂存文件（一次性放行可用 `FEATFLOW_BOOTSTRAP=1` / `FEATFLOW_SKIP_SIZE_CHECK=1`）。 |
+| `featflow hook <antigravity\|claude-code\|codex\|cursor> <event>` | 通用 AI Coding Agent Hook 适配器，原生支持 Antigravity（`.agents/hooks.json`）、Claude Code（`.claude/settings.json`）、OpenAI Codex（`.codex/config.toml`）与 Cursor（`.cursor/hooks.json`）。 |
 | `featflow doctor` | 体检 Git、配置、模板、Skill、Hooks 与当前 feature 计划状态。 |
 
 ---

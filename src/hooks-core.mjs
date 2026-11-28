@@ -37,25 +37,33 @@ export function extractCodexPatchPaths(patchText) {
 
 export function normalizeHookPayload(adapter, rawInput) {
   const input = rawInput && typeof rawInput === "object" ? rawInput : {};
-  const toolName = String(input.tool_name ?? input.toolName ?? "");
-  const toolInput = input.tool_input ?? input.toolInput ?? {};
-  const prompt = String(input.prompt ?? input.user_prompt ?? input.userPrompt ?? "");
+  const antigravityCall = input.toolCall && typeof input.toolCall === "object" ? input.toolCall : null;
+  const toolName = String(antigravityCall?.name ?? input.tool_name ?? input.toolName ?? "");
+  const toolInput = antigravityCall?.args ?? input.tool_input ?? input.toolInput ?? {};
+  const prompt = String(
+    input.lastUserInput ?? input.prompt ?? input.user_prompt ?? input.userPrompt ?? "",
+  );
 
-  let command = "";
+  let command = typeof input.command === "string" ? input.command : "";
   let rawPatch = "";
   let filePaths = [];
+  if (typeof input.file_path === "string" && input.file_path.trim()) {
+    filePaths.push(input.file_path.trim());
+  }
 
   if (typeof toolInput === "string") {
     if (toolInput.includes("*** Begin Patch")) {
       rawPatch = toolInput;
       filePaths = extractCodexPatchPaths(toolInput);
-    } else {
+    } else if (!command) {
       command = toolInput;
     }
   } else if (toolInput && typeof toolInput === "object") {
-    command = String(
-      toolInput.cmd ?? toolInput.command ?? toolInput.shell_command ?? "",
-    );
+    if (!command) {
+      command = String(
+        toolInput.CommandLine ?? toolInput.cmd ?? toolInput.command ?? toolInput.shell_command ?? "",
+      );
+    }
     const patch = String(toolInput.patch ?? toolInput.diff ?? toolInput.input ?? "");
     if (patch) {
       rawPatch = patch;
@@ -63,14 +71,15 @@ export function normalizeHookPayload(adapter, rawInput) {
         filePaths.push(...extractCodexPatchPaths(patch));
       }
     }
-    if (typeof toolInput.file_path === "string" && toolInput.file_path.trim()) {
-      filePaths.push(toolInput.file_path.trim());
+    for (const key of ["file_path", "TargetFile", "target_file", "notebook_path"]) {
+      if (typeof toolInput[key] === "string" && toolInput[key].trim()) {
+        filePaths.push(toolInput[key].trim());
+      }
     }
-    if (typeof toolInput.path === "string" && toolInput.path.trim() && isEditToolName(toolName)) {
-      filePaths.push(toolInput.path.trim());
-    }
-    if (typeof toolInput.notebook_path === "string" && toolInput.notebook_path.trim()) {
-      filePaths.push(toolInput.notebook_path.trim());
+    for (const key of ["Path", "path"]) {
+      if (typeof toolInput[key] === "string" && toolInput[key].trim() && isEditToolName(toolName)) {
+        filePaths.push(toolInput[key].trim());
+      }
     }
   }
 
@@ -85,7 +94,9 @@ export function normalizeHookPayload(adapter, rawInput) {
 }
 
 function isEditToolName(toolName) {
-  return /^(?:edit|multiedit|write|write_file|edit_file|notebookedit|apply_patch)$/i.test(toolName);
+  return /^(?:edit|multiedit|write|write_file|edit_file|replace_file_content|multi_replace_file_content|write_to_file|strreplace|notebookedit|apply_patch)$/i.test(
+    toolName,
+  );
 }
 
 function isSetupCommand(command) {
@@ -307,7 +318,7 @@ export function evaluateUserPrompt(config, payload) {
   };
 }
 
-function stateFilePath(repoRoot, name, env = process.env) {
+export function stateFilePath(repoRoot, name, env = process.env) {
   const dir = env.FEATFLOW_HOOK_STATE_DIR ?? path.resolve(repoRoot, ".featflow", "hook-state");
   mkdirSync(dir, { recursive: true });
   return path.resolve(dir, name);

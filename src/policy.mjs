@@ -3,7 +3,9 @@ import {
   gitConfigGet,
   remoteExists,
   remoteTrackingBranchExists,
+  runReadSoft,
 } from "./git.mjs";
+import { evaluateFileSizeBudget } from "./size-check.mjs";
 
 export function setupInstructions(config) {
   if (config.mode === "developer-branch") {
@@ -80,6 +82,34 @@ export function evaluatePreCommit(repoRoot, config, env = process.env) {
       ok: false,
       message: `Refusing to commit directly on protected branch "${branch}". Create a task worktree from ${baseHint} using: featflow worktree <prefix>/<task>`,
     };
+  }
+
+  if (config.fileSizeBudget?.enforceInPreCommit && env.FEATFLOW_SKIP_SIZE_CHECK !== "1") {
+    const stagedRes = runReadSoft(
+      "git",
+      ["diff", "--cached", "--name-only", "--diff-filter=ACMR"],
+      repoRoot,
+    );
+    const stagedFiles =
+      stagedRes.status === 0
+        ? stagedRes.stdout
+            .split(/\r?\n/)
+            .map((line) => line.trim())
+            .filter(Boolean)
+        : [];
+    if (stagedFiles.length > 0) {
+      const sizeRes = evaluateFileSizeBudget(repoRoot, config, { files: stagedFiles });
+      if (!sizeRes.ok) {
+        return {
+          ok: false,
+          message: [
+            "Refusing to commit because staged file(s) exceed configured fileSizeBudget:",
+            ...sizeRes.failures.map((f) => `  - ${f.path}: ${f.lines} lines exceeds ${f.label}`),
+            "Split oversized files into smaller focused modules (or bypass once with FEATFLOW_SKIP_SIZE_CHECK=1).",
+          ].join("\n"),
+        };
+      }
+    }
   }
 
   return { ok: true };

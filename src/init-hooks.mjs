@@ -1,11 +1,41 @@
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
-import { resolveAgentDocTargets } from "./agent-docs.mjs";
 import { packageRoot } from "./config.mjs";
 
 const CODEX_BLOCK_START = "# >>> featflow managed hooks >>>";
 const CODEX_BLOCK_END = "# <<< featflow managed hooks <<<";
+
+export const AGENT_HOOK_IDS = ["antigravity", "claude-code", "codex", "cursor"];
+
+export function parseAgentHooksList(rawValue) {
+  const normalized = String(rawValue ?? "").trim().toLowerCase();
+  if (!normalized || normalized === "none") {
+    return new Set();
+  }
+  if (normalized === "all") {
+    return new Set(AGENT_HOOK_IDS);
+  }
+  const aliases = {
+    antigravity: "antigravity",
+    agy: "antigravity",
+    claude: "claude-code",
+    "claude-code": "claude-code",
+    codex: "codex",
+    cursor: "cursor",
+  };
+  const selected = new Set();
+  for (const part of normalized.split(",").map((s) => s.trim()).filter(Boolean)) {
+    const mapped = aliases[part];
+    if (!mapped) {
+      throw new Error(
+        `Unknown agent hook target "${part}". Expected comma-separated values from: ${AGENT_HOOK_IDS.join(", ")}, "all", or "none".`,
+      );
+    }
+    selected.add(mapped);
+  }
+  return selected;
+}
 
 export function copyTemplateFile(src, dest, force, created, skipped) {
   if (existsSync(dest) && !force) {
@@ -48,7 +78,7 @@ export function ensureGitignoreEntries(repoRoot, entries) {
   return toAdd;
 }
 
-function hasClaudeHookCommand(entries, command) {
+function hasHookCommand(entries, command) {
   if (!Array.isArray(entries)) {
     return false;
   }
@@ -104,7 +134,102 @@ export function installClaudeHooks(repoRoot, force, created, updated, skipped, n
     }
     for (const templateEntry of templateEntries) {
       const targetCmd = templateEntry.hooks?.[0]?.command ?? templateEntry.command ?? "";
-      if (targetCmd && !hasClaudeHookCommand(existing.hooks[eventName], targetCmd)) {
+      if (targetCmd && !hasHookCommand(existing.hooks[eventName], targetCmd)) {
+        existing.hooks[eventName].push(templateEntry);
+        changed = true;
+      }
+    }
+  }
+
+  if (changed) {
+    writeFileSync(dest, `${JSON.stringify(existing, null, 2)}\n`, "utf8");
+    updated.push(dest);
+  } else {
+    skipped.push(dest);
+  }
+}
+
+export function installAntigravityHooks(repoRoot, force, created, updated, skipped, notices) {
+  const src = path.join(packageRoot, "templates", "adapters", "antigravity", "hooks.json");
+  const dest = path.join(repoRoot, ".agents", "hooks.json");
+
+  if (!existsSync(dest) || force) {
+    copyTemplateFile(src, dest, force, created, skipped);
+    return;
+  }
+
+  let existing;
+  try {
+    existing = JSON.parse(readFileSync(dest, "utf8"));
+  } catch (error) {
+    skipped.push(dest);
+    notices.push(
+      `Skipped merging .agents/hooks.json (invalid JSON: ${error instanceof Error ? error.message : String(error)}).`,
+    );
+    return;
+  }
+
+  if (!existing || typeof existing !== "object" || Array.isArray(existing)) {
+    skipped.push(dest);
+    notices.push("Skipped merging .agents/hooks.json (expected a top-level JSON object).");
+    return;
+  }
+
+  const template = JSON.parse(readFileSync(src, "utf8"));
+  const before = JSON.stringify(existing.featflow ?? null);
+  const after = JSON.stringify(template.featflow);
+  if (before === after) {
+    skipped.push(dest);
+    return;
+  }
+
+  existing.featflow = template.featflow;
+  writeFileSync(dest, `${JSON.stringify(existing, null, 2)}\n`, "utf8");
+  updated.push(dest);
+}
+
+export function installCursorHooks(repoRoot, force, created, updated, skipped, notices) {
+  const src = path.join(packageRoot, "templates", "adapters", "cursor", "hooks.json");
+  const dest = path.join(repoRoot, ".cursor", "hooks.json");
+
+  if (!existsSync(dest) || force) {
+    copyTemplateFile(src, dest, force, created, skipped);
+    return;
+  }
+
+  let existing;
+  try {
+    existing = JSON.parse(readFileSync(dest, "utf8"));
+  } catch (error) {
+    skipped.push(dest);
+    notices.push(
+      `Skipped merging .cursor/hooks.json (invalid JSON: ${error instanceof Error ? error.message : String(error)}).`,
+    );
+    return;
+  }
+
+  if (!existing || typeof existing !== "object" || Array.isArray(existing)) {
+    skipped.push(dest);
+    notices.push("Skipped merging .cursor/hooks.json (expected a top-level JSON object).");
+    return;
+  }
+
+  const template = JSON.parse(readFileSync(src, "utf8"));
+  if (existing.version === undefined) {
+    existing.version = template.version ?? 1;
+  }
+  if (!existing.hooks || typeof existing.hooks !== "object" || Array.isArray(existing.hooks)) {
+    existing.hooks = {};
+  }
+
+  let changed = false;
+  for (const [eventName, templateEntries] of Object.entries(template.hooks ?? {})) {
+    if (!Array.isArray(existing.hooks[eventName])) {
+      existing.hooks[eventName] = [];
+    }
+    for (const templateEntry of templateEntries) {
+      const targetCmd = templateEntry.command ?? "";
+      if (targetCmd && !hasHookCommand(existing.hooks[eventName], targetCmd)) {
         existing.hooks[eventName].push(templateEntry);
         changed = true;
       }
@@ -166,8 +291,14 @@ export function installCodexAgents(repoRoot, force, created, skipped) {
   }
 }
 
+export function installInitialRegressionLedger(repoRoot, ledgerRelPath, force, created, skipped) {
+  const src = path.join(packageRoot, "templates", "regression", "regression-ledger.yml");
+  const dest = path.resolve(repoRoot, ledgerRelPath || "context/regression-ledger.yml");
+  return copyTemplateFile(src, dest, force, created, skipped);
+}
+
 export function parseYesNo(answer, defaultYes = true) {
-  const normalized = answer.trim().toLowerCase();
+  const normalized = String(answer ?? "").trim().toLowerCase();
   if (!normalized) {
     return defaultYes;
   }
@@ -178,82 +309,4 @@ export function parseYesNo(answer, defaultYes = true) {
     return false;
   }
   return defaultYes;
-}
-
-export async function promptInteractiveOptions(rl, options, detected, repoRoot) {
-  console.log("Detected repository environment:");
-  console.log(
-    `  Base branch:    ${detected.defaultBranch}${detected.hasDevBranch ? ` (integration: ${detected.integrationBranch})` : ""}`,
-  );
-  console.log(`  Product paths:  ${detected.productPaths.join(", ")} (${detected.productPathsSource})`);
-  console.log(`  Verify command: ${detected.verifyCommand || "(none detected)"}`);
-  const docTargets = resolveAgentDocTargets(repoRoot, options.agentDocs);
-  console.log(`  Agent docs:     ${docTargets.join(", ")}`);
-  if (detected.existingHooksPath) {
-    console.log(`  Git hooks path: ${detected.existingHooksPath} (will not overwrite)`);
-  }
-  console.log("");
-
-  if (!options.minimalExplicit && !options.localFeatures && !options.trackPointer) {
-    const answer = (await rl.question("Setup profile [full/minimal] (full): ")).trim().toLowerCase();
-    if (answer === "minimal" || answer === "m") {
-      options.minimal = true;
-    }
-  }
-
-  if (!options.modeExplicit) {
-    const defaultMode = detected.hasDevBranch ? "developer-branch" : "trunk";
-    const answer = (await rl.question(`Branch mode [trunk/developer-branch] (${defaultMode}): `)).trim().toLowerCase();
-    if (answer === "developer-branch" || answer === "dev" || answer === "d") {
-      options.mode = "developer-branch";
-    } else if (answer === "trunk" || answer === "t") {
-      options.mode = "trunk";
-    } else {
-      options.mode = defaultMode;
-    }
-  }
-
-  if (options.mode === "trunk" && !options.finishTargetExplicit) {
-    const defaultFinish = detected.isHostedGit ? "pr" : "merge";
-    const answer = (await rl.question(`Trunk finish target [merge/pr] (${defaultFinish}): `)).trim().toLowerCase();
-    if (answer === "pr" || answer === "merge") {
-      options.finishTarget = answer;
-    } else {
-      options.finishTarget = defaultFinish;
-    }
-  }
-
-  if (!options.hooksExplicit) {
-    if (options.minimal) {
-      const answer = await rl.question("Install local Git hooks in .git/hooks/? [Y/n]: ");
-      if (parseYesNo(answer, true)) {
-        options.localHooks = true;
-      } else {
-        options.noHooks = true;
-      }
-    } else {
-      const answer = (await rl.question("Enable Git hooks? [repo/local/none] (repo): ")).trim().toLowerCase();
-      if (answer === "none" || answer === "n") {
-        options.noHooks = true;
-      } else if (answer === "local" || answer === "l") {
-        options.localHooks = true;
-      } else {
-        options.withGithooks = true;
-      }
-    }
-  }
-
-  if (detected.hasClaudeDir && !options.withClaudeHooks) {
-    const answer = await rl.question("Install/merge Claude Code hooks (.claude/settings.json)? [Y/n]: ");
-    if (parseYesNo(answer, true)) {
-      options.withClaudeHooks = true;
-    }
-  }
-
-  if (detected.hasCodexDir && !options.withCodexHooks) {
-    const answer = await rl.question("Install/merge Codex hooks (.codex/config.toml)? [Y/n]: ");
-    if (parseYesNo(answer, true)) {
-      options.withCodexHooks = true;
-    }
-  }
 }

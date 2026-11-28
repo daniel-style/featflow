@@ -34,7 +34,7 @@ Install `featflow` **once globally** and adapt its footprint per repository — 
 
 ```bash
 # 1. Install the CLI globally once
-npm install -g github:daniel-style/featflow#v0.3.1
+npm install -g github:daniel-style/featflow#v0.6.0
 
 # 2. Install the Agent Skill globally once (Codex, Claude Code, Cursor, Antigravity)
 npx skills add https://github.com/daniel-style/featflow --skill featflow -g
@@ -66,14 +66,16 @@ featflow init --minimal
 ### Option B — Embed in a Team JS/TS Repository
 
 ```bash
-npm install -D github:daniel-style/featflow#v0.3.1
+npm install -D github:daniel-style/featflow#v0.6.0
 
-# One-command onboarding: auto-detects branches/paths/tests, injects AGENTS.md block, sets up hooks
-# (Interactive on TTY; add --yes for scripts/CI; pass --mode developer-branch for team branch topology)
-npx featflow init --with-githooks
+# Interactive wizard with checkbox multi-select (workflow guardrails + AI agent hooks):
+npx featflow init
 
-# Optional: install or safely merge Codex / Claude Code agent hook configs
-npx featflow init --with-codex-hooks --with-claude-hooks
+# Or one-command full bundle (size budget + pre-commit guard + Regression Guardian + Issues + all 4 AI agent hooks):
+npx featflow init --preset full --yes
+
+# Or non-destructively upgrade an existing repo to add universal agent hooks & regression ledger:
+npx featflow init --merge --with-all-hooks --with-regression
 ```
 
 `featflow init` automatically injects a non-destructive `<!-- FEATFLOW_START --> ... <!-- FEATFLOW_END -->` workflow block into `AGENTS.md` / `CLAUDE.md` (opt out with `--no-agent-docs`) and keeps it synced via `featflow sync`.
@@ -118,7 +120,7 @@ main (release, protected)
 | --- | --- |
 | `featflow new <slug> [options]` | Create a feature (or `--program`) record from the repo template or `featflow`'s built-in template, auto-filling timestamps, `owner`, and branch. Pass `--local` to store under `.featflow/features/` (excluded via `.git/info/exclude`, zero tracked files). |
 | `featflow hooks <install\|uninstall\|status>` | Manage Git hooks: `--local` (default) adds/removes fenced blocks inside `.git/hooks/` without modifying repo files or overwriting custom hooks; `--repo` installs tracked `.githooks/`. |
-| `featflow init [options]` | Auto-detect branches, `productPaths`, and `verifyCommands`; inject managed `AGENTS.md`/`CLAUDE.md` workflow block; scaffold full repo files or use `--minimal` (`.featflow.json` + `AGENTS.md` block + local `.git/hooks/`); safely merge existing `.claude/settings.json` / `.codex/config.toml`; interactively chain `setup` in `developer-branch` mode (`--yes` for non-interactive). |
+| `featflow init [options]` | Auto-detect repo config, inject managed `AGENTS.md`/`CLAUDE.md` block, and interactively pick guardrails & AI coding-agent hooks with TUI multi-select checkboxes. Supports `--preset full` (all guardrails + all 4 agent hooks), `--minimal`, `--merge` (non-destructive upgrade of existing repos with auto legacy size baseline), `--agent-hooks <antigravity,claude-code,codex,cursor|all|none>`, and `--yes`. |
 | `featflow sync [options]` | Sync managed Skill, feature templates, `.githooks/`, and `AGENTS.md`/`CLAUDE.md` blocks from the installed `featflow` version without modifying `.featflow.json`, feature records, or custom doc content. Pass `--check` in CI to fail on drift, or `--only skill,templates,githooks,agent-docs`. |
 | `featflow setup [dev-branch]` | Configure personal developer branch (in `developer-branch` mode) and safely enable Git hooks without clobbering Husky/Lefthook. |
 | `featflow status` | Inspect workflow mode, branch/remote status, all worktrees, active/paused feature records, and next recommended step. |
@@ -132,8 +134,8 @@ main (release, protected)
 | `featflow cleanup` | Clean local task branches and clean worktrees already merged into the base/developer branch. Also runs on `post-merge` via `--post-merge`. |
 | `featflow pr-cleanup <pr>` | After a GitHub PR merges (via `gh`), sync the local base branch, remove the clean PR worktree, delete local/remote branch, and prune refs. |
 | `featflow plan-check [path]` | Validate required `Plan Details` headings, placeholder resolution (ignoring code spans/fences), and recorded pre-implementation approval. |
-| `featflow policy <pre-commit\|pre-push>` | Git hook guard blocking direct commits/pushes to protected branches (bypass one-off bootstrap with `FEATFLOW_BOOTSTRAP=1`). |
-| `featflow hook <codex\|claude-code> <event>` | Coding-agent hook adapter for `pre-tool-use`, `user-prompt`, and `stop`. |
+| `featflow policy <pre-commit\|pre-push>` | Git hook guard blocking direct commits/pushes to protected branches and staged files exceeding `fileSizeBudget` when `enforceInPreCommit: true` (bypass once with `FEATFLOW_BOOTSTRAP=1` / `FEATFLOW_SKIP_SIZE_CHECK=1`). |
+| `featflow hook <antigravity\|claude-code\|codex\|cursor> <event>` | Universal AI coding-agent hook adapter supporting Antigravity (`.agents/hooks.json`), Claude Code (`.claude/settings.json`), OpenAI Codex (`.codex/config.toml`), and Cursor (`.cursor/hooks.json`). |
 | `featflow doctor` | Run repository health checks across Git, config, templates, Skill, hooks, and active feature plan. |
 
 ---
