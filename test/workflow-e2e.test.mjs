@@ -313,4 +313,59 @@ describe("featflow CLI end-to-end workflows", () => {
       rmSync(fixture.parent, { force: true, recursive: true });
     }
   });
+
+  it("bootstraps missing origin/dev interactively during init and via setup --bootstrap-integration, and auto-fetches remote branches", () => {
+    const fixture = createRepo("bootstrap-dev-remote", { withRemote: true, withDev: false });
+    try {
+      const { parent, repo } = fixture;
+
+      // Interactive init on a repo with origin/main only (no origin/dev yet):
+      // 1. profile -> minimal
+      // 2. mode -> developer-branch
+      // 3. git hooks -> local
+      // 4. agent hooks -> Enter (none)
+      // 5. set up personal dev branch now -> Enter (Yes)
+      // 6. personal developer branch name [alice] -> Enter (alice)
+      // 7. integration branch origin/dev does not exist yet -> Enter (create-and-push)
+      const initRes = featflow(["init"], repo, {
+        env: { FEATFLOW_FORCE_TTY: "1" },
+        input: "minimal\ndeveloper-branch\nlocal\n\n\n\n\n",
+      });
+      assert.equal(initRes.status, 0, initRes.stderr);
+      assert.match(initRes.stdout, /Developer branch configured: alice \(bootstrapped origin\/dev/);
+      assert.equal(mustRun("git", ["config", "--get", "featflow.developerBranch"], repo), "alice");
+      assert.equal(branchExists(repo, "dev"), true);
+      assert.equal(branchExists(repo, "alice"), true);
+      assert.equal(run("git", ["ls-remote", "--exit-code", "--heads", "origin", "dev"], repo).status, 0);
+      assert.equal(run("git", ["ls-remote", "--exit-code", "--heads", "origin", "alice"], repo).status, 0);
+
+      // Fresh second clone where origin/dev exists remotely but was not fetched yet:
+      const clone2 = path.join(parent, "clone-2");
+      mustRun("git", ["clone", "--single-branch", "--branch", "main", path.join(parent, "origin.git"), clone2], parent);
+      mustRun("git", ["config", "user.name", "Bob"], clone2);
+      mustRun("git", ["config", "user.email", "bob@example.test"], clone2);
+      mustFeatflow(["init", "--minimal", "--mode", "developer-branch", "--yes", "--no-hooks"], clone2);
+      // Allow fetching dev even on a single-branch clone by restoring standard refspec
+      mustRun("git", ["config", "remote.origin.fetch", "+refs/heads/*:refs/remotes/origin/*"], clone2);
+      mustFeatflow(["setup", "bob"], clone2);
+      assert.equal(mustRun("git", ["config", "--get", "featflow.developerBranch"], clone2), "bob");
+      assert.equal(branchExists(clone2, "bob"), true);
+    } finally {
+      rmSync(fixture.parent, { force: true, recursive: true });
+    }
+
+    // Non-interactive setup --bootstrap-integration creates & pushes origin/dev automatically
+    const nonIntFixture = createRepo("bootstrap-dev-flag", { withRemote: true, withDev: false });
+    try {
+      const { repo } = nonIntFixture;
+      mustFeatflow(["init", "--minimal", "--mode", "developer-branch", "--yes", "--no-hooks"], repo);
+      const res = mustFeatflow(["setup", "carol", "--bootstrap-integration"], repo);
+      assert.match(res, /Developer branch configured: carol \(bootstrapped origin\/dev/);
+      assert.equal(mustRun("git", ["config", "--get", "featflow.developerBranch"], repo), "carol");
+      assert.equal(run("git", ["ls-remote", "--exit-code", "--heads", "origin", "dev"], repo).status, 0);
+      assert.equal(run("git", ["ls-remote", "--exit-code", "--heads", "origin", "carol"], repo).status, 0);
+    } finally {
+      rmSync(nonIntFixture.parent, { force: true, recursive: true });
+    }
+  });
 });

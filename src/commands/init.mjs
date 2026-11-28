@@ -11,7 +11,7 @@ import {
   presetConfig,
 } from "../config.mjs";
 import { applyDetectedConfig, detectRepoEnvironment } from "../detect.mjs";
-import { fail, findRepoRoot } from "../git.mjs";
+import { fail, findRepoRoot, gitConfigGet } from "../git.mjs";
 import { INIT_USAGE, parseInitArgs } from "../init-args.mjs";
 import {
   copyTemplateFile,
@@ -301,7 +301,9 @@ export async function runInit(argv) {
     }
 
     let devSetupSummary = "";
-    if (!options.merge && config.mode === "developer-branch") {
+    const devBranchConfigKey = config.developerBranchConfigKey || "featflow.developerBranch";
+    const hasConfiguredDevBranch = Boolean(gitConfigGet(devBranchConfigKey, repoRoot));
+    if (config.mode === "developer-branch" && (!options.merge || !hasConfiguredDevBranch)) {
       let shouldRunSetup = Boolean(options.developerBranch);
       if (!shouldRunSetup && prompter) {
         const answer = await promptSingleSelect(prompter, {
@@ -323,7 +325,9 @@ export async function runInit(argv) {
           });
           devSetupSummary = `Developer branch configured: ${setupRes.branch} (${setupRes.result})`;
         } catch (error) {
-          notices.push(`Skipped developer branch setup: ${error instanceof Error ? error.message : String(error)}`);
+          notices.push(
+            `[WARN] Developer branch setup was NOT completed:\n${error instanceof Error ? error.message : String(error)}`,
+          );
         }
       }
     }

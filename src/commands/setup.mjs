@@ -1,6 +1,5 @@
 import { existsSync } from "node:fs";
 import path from "node:path";
-import { createInterface } from "node:readline";
 
 import { loadConfig } from "../config.mjs";
 import {
@@ -10,17 +9,21 @@ import {
   localBranchExists,
   remoteBranchExists,
   remoteExists,
+  remoteTrackingBranchExists,
   runWrite,
   validateDeveloperBranchName,
 } from "../git.mjs";
+import { createPromptReader, createSmartPrompter, promptSingleSelect } from "../tui-select.mjs";
 import { configureGitHooksSafely } from "./hooks-cmd.mjs";
+
+export { createPromptReader };
 
 const usage = `
 Usage:
   featflow setup [developer-branch] [options]
 
 In developer-branch mode:
-  1. Verifies the integration branch exists (remote or local when --local-only).
+  1. Verifies the integration branch exists (bootstraps & pushes it from releaseBranch if confirmed or --bootstrap-integration).
   2. Creates or tracks your personal developer branch.
   3. Pushes and sets upstream tracking (unless --local-only).
   4. Saves the branch in git config (<developerBranchConfigKey>).
@@ -30,16 +33,18 @@ In trunk mode:
   Verifies baseBranch exists and safely enables .githooks if present.
 
 Options:
-  --remote <name>   Override configured remote (default from .featflow.json).
-  --local-only      Set up locally without touching the remote.
-  --skip-hooks      Do not configure core.hooksPath.
-  -h, --help        Show this help.
+  --remote <name>          Override configured remote (default from .featflow.json).
+  --bootstrap-integration  Auto-create and push the missing integration branch (e.g. origin/dev) from releaseBranch.
+  --local-only             Set up locally without touching the remote.
+  --skip-hooks             Do not configure core.hooksPath.
+  -h, --help               Show this help.
 `.trim();
 
 function parseArgs(argv) {
   const options = {
     branch: "",
     remote: "",
+    bootstrapIntegration: false,
     localOnly: false,
     skipHooks: false,
   };
@@ -50,6 +55,10 @@ function parseArgs(argv) {
     if (arg === "-h" || arg === "--help") {
       console.log(usage);
       process.exit(0);
+    }
+    if (arg === "--bootstrap-integration") {
+      options.bootstrapIntegration = true;
+      continue;
     }
     if (arg === "--local-only") {
       options.localOnly = true;
@@ -80,27 +89,106 @@ function parseArgs(argv) {
   return options;
 }
 
-function ensureDeveloperBranch(repoRoot, branchName, remote, config, localOnly) {
+function resolveIntegrationStartRef(repoRoot, remote, config) {
+  const release = config.releaseBranch || "main";
+  if (remote && remoteTrackingBranchExists(remote, release, repoRoot)) {
+    return `${remote}/${release}`;
+  }
+  if (localBranchExists(release, repoRoot)) {
+    return release;
+  }
+  return "HEAD";
+}
+
+function ensureLocalDeveloperBranch(repoRoot, branchName, integration, startRef) {
+  let createdIntegration = false;
+  if (!localBranchExists(integration, repoRoot)) {
+    runWrite("git", ["branch", integration, startRef], repoRoot);
+    createdIntegration = true;
+  }
+  if (!localBranchExists(branchName, repoRoot)) {
+    runWrite("git", ["branch", branchName, integration], repoRoot);
+    return createdIntegration
+      ? `created local ${integration} and developer branch from ${startRef}`
+      : `created local developer branch from ${integration}`;
+  }
+  return "using existing local developer branch";
+}
+
+async function ensureDeveloperBranch(repoRoot, branchName, remote, config, options = {}) {
+  const localOnly = Boolean(options.localOnly);
   const hasRemote = !localOnly && remoteExists(remote, repoRoot);
   const integration = config.integrationBranch;
   const remoteIntegration = `${remote}/${integration}`;
+  const startRef = resolveIntegrationStartRef(repoRoot, hasRemote ? remote : "", config);
 
   if (hasRemote) {
+    let bootstrappedIntegration = false;
+
     if (!remoteBranchExists(remote, integration, repoRoot)) {
-      throw new Error(
-        [
-          `Integration branch ${remoteIntegration} does not exist yet.`,
-          `Create or push ${integration} first, or pass --local-only for offline setup.`,
-        ].join("\n"),
-      );
+      let action = options.bootstrapIntegration ? "create-and-push" : "";
+      if (!action && options.rl) {
+        action = await promptSingleSelect(options.rl, {
+          title: `Integration branch "${remoteIntegration}" does not exist yet`,
+          defaultId: "create-and-push",
+          choices: [
+            {
+              id: "create-and-push",
+              label: "create-and-push",
+              detail: `create "${integration}" from "${startRef}", push ${remoteIntegration}, and finish setup`,
+              aliases: ["y", "yes", "create", "push"],
+            },
+            {
+              id: "local-only",
+              label: "local-only",
+              detail: "create local branch only without pushing to remote",
+              aliases: ["l", "local"],
+            },
+            {
+              id: "skip",
+              label: "skip",
+              detail: "abort developer branch setup for now",
+              aliases: ["n", "no", "s"],
+            },
+          ],
+        });
+      }
+
+      if (action === "create-and-push") {
+        if (!localBranchExists(integration, repoRoot)) {
+          runWrite("git", ["branch", integration, startRef], repoRoot);
+        }
+        runWrite("git", ["push", "-u", remote, integration], repoRoot, {
+          env: { FEATFLOW_BOOTSTRAP: "1" },
+        });
+        bootstrappedIntegration = true;
+      } else if (action === "local-only") {
+        return ensureLocalDeveloperBranch(repoRoot, branchName, integration, startRef);
+      } else {
+        throw new Error(
+          [
+            `Integration branch ${remoteIntegration} does not exist yet.`,
+            `Run \`featflow setup ${branchName} --bootstrap-integration\` to create & push ${remoteIntegration} from ${startRef}, or pass --local-only for offline setup.`,
+          ].join("\n"),
+        );
+      }
+    }
+
+    if (!remoteTrackingBranchExists(remote, integration, repoRoot)) {
+      runWrite("git", ["fetch", remote, integration], repoRoot);
     }
 
     const localExists = localBranchExists(branchName, repoRoot);
     const remoteExistsForBranch = remoteBranchExists(remote, branchName, repoRoot);
 
     if (!localExists && remoteExistsForBranch) {
+      if (!remoteTrackingBranchExists(remote, branchName, repoRoot)) {
+        runWrite("git", ["fetch", remote, branchName], repoRoot);
+      }
       runWrite("git", ["branch", "--track", branchName, `${remote}/${branchName}`], repoRoot);
-      return "tracked existing remote branch";
+      return bootstrappedIntegration
+        ? `bootstrapped ${remoteIntegration} + tracked existing remote branch`
+        : "tracked existing remote branch";
     }
 
     if (!localExists) {
@@ -110,20 +198,17 @@ function ensureDeveloperBranch(repoRoot, branchName, remote, config, localOnly) 
     runWrite("git", ["push", "-u", remote, branchName], repoRoot, {
       env: { FEATFLOW_BOOTSTRAP: "1" },
     });
-    return remoteExistsForBranch ? "updated existing remote branch" : "created and pushed new developer branch";
+    const baseMsg = remoteExistsForBranch
+      ? "updated existing remote branch"
+      : "created and pushed new developer branch";
+    return bootstrappedIntegration ? `bootstrapped ${remoteIntegration} + ${baseMsg}` : baseMsg;
   }
 
   if (config.requireRemote && !localOnly) {
     throw new Error(`Remote "${remote}" is not configured. Add a remote or pass --local-only.`);
   }
 
-  if (!localBranchExists(branchName, repoRoot)) {
-    const startRef = localBranchExists(integration, repoRoot) ? integration : "HEAD";
-    runWrite("git", ["branch", branchName, startRef], repoRoot);
-    return `created local developer branch from ${startRef}`;
-  }
-
-  return "using existing local developer branch";
+  return ensureLocalDeveloperBranch(repoRoot, branchName, integration, startRef);
 }
 
 export function suggestDeveloperBranch(repoRoot, config, protectedBranches) {
@@ -143,48 +228,6 @@ export function suggestDeveloperBranch(repoRoot, config, protectedBranches) {
   return "";
 }
 
-export function createPromptReader() {
-  const rl = createInterface({ input: process.stdin, output: process.stdout });
-  const queuedLines = [];
-  const waiters = [];
-  let closed = false;
-
-  rl.on("line", (line) => {
-    if (waiters.length > 0) {
-      const resolve = waiters.shift();
-      resolve(line);
-    } else {
-      queuedLines.push(line);
-    }
-  });
-
-  rl.on("close", () => {
-    closed = true;
-    while (waiters.length > 0) {
-      const resolve = waiters.shift();
-      resolve("");
-    }
-  });
-
-  return {
-    async question(promptText) {
-      process.stdout.write(promptText);
-      if (queuedLines.length > 0) {
-        return queuedLines.shift();
-      }
-      if (closed) {
-        return "";
-      }
-      return new Promise((resolve) => {
-        waiters.push(resolve);
-      });
-    },
-    close() {
-      rl.close();
-    },
-  };
-}
-
 async function resolveDeveloperBranch(options, repoRoot, config, protectedBranches, sharedRl = null) {
   if (options.branch) {
     return options.branch;
@@ -196,7 +239,7 @@ async function resolveDeveloperBranch(options, repoRoot, config, protectedBranch
     process.env.FEATFLOW_FORCE_TTY === "1";
 
   if (isInteractive) {
-    const rl = sharedRl ?? createPromptReader();
+    const rl = sharedRl ?? createSmartPrompter();
     try {
       const promptLabel = suggested
         ? `Personal developer branch name [${suggested}]: `
@@ -221,18 +264,35 @@ async function resolveDeveloperBranch(options, repoRoot, config, protectedBranch
 export async function setupDeveloperBranchWorkflow(repoRoot, config, options = {}) {
   const remote = options.remote || config.remote;
   const protectedBranches = new Set(config.protectedBranches);
-  const branch = await resolveDeveloperBranch(
-    { branch: options.branch ?? "" },
-    repoRoot,
-    config,
-    protectedBranches,
-    options.rl ?? null,
-  );
-  validateDeveloperBranchName(branch, repoRoot, protectedBranches);
+  const isInteractive =
+    Boolean(options.rl) ||
+    Boolean(process.stdin.isTTY && process.stdout.isTTY) ||
+    process.env.FEATFLOW_FORCE_TTY === "1";
+  const ownsPrompter = !options.rl && isInteractive;
+  const prompter = options.rl ?? (ownsPrompter ? createSmartPrompter() : null);
 
-  const result = ensureDeveloperBranch(repoRoot, branch, remote, config, Boolean(options.localOnly));
-  gitConfigSet(config.developerBranchConfigKey, branch, repoRoot);
-  return { branch, result };
+  try {
+    const branch = await resolveDeveloperBranch(
+      { branch: options.branch ?? "" },
+      repoRoot,
+      config,
+      protectedBranches,
+      prompter,
+    );
+    validateDeveloperBranchName(branch, repoRoot, protectedBranches);
+
+    const result = await ensureDeveloperBranch(repoRoot, branch, remote, config, {
+      localOnly: Boolean(options.localOnly),
+      bootstrapIntegration: Boolean(options.bootstrapIntegration),
+      rl: prompter,
+    });
+    gitConfigSet(config.developerBranchConfigKey, branch, repoRoot);
+    return { branch, result };
+  } finally {
+    if (ownsPrompter && prompter) {
+      prompter.close();
+    }
+  }
 }
 
 export async function runSetup(argv) {
@@ -244,6 +304,7 @@ export async function runSetup(argv) {
       const setupResult = await setupDeveloperBranchWorkflow(repoRoot, config, {
         branch: options.branch,
         remote: options.remote,
+        bootstrapIntegration: options.bootstrapIntegration,
         localOnly: options.localOnly,
       });
       options.branch = setupResult.branch;

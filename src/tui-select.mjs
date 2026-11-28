@@ -1,4 +1,46 @@
-import { createPromptReader } from "./commands/setup.mjs";
+import { createInterface } from "node:readline";
+
+export function createPromptReader() {
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  const queuedLines = [];
+  const waiters = [];
+  let closed = false;
+
+  rl.on("line", (line) => {
+    if (waiters.length > 0) {
+      const resolve = waiters.shift();
+      resolve(line);
+    } else {
+      queuedLines.push(line);
+    }
+  });
+
+  rl.on("close", () => {
+    closed = true;
+    while (waiters.length > 0) {
+      const resolve = waiters.shift();
+      resolve("");
+    }
+  });
+
+  return {
+    async question(promptText) {
+      process.stdout.write(promptText);
+      if (queuedLines.length > 0) {
+        return queuedLines.shift();
+      }
+      if (closed) {
+        return "";
+      }
+      return new Promise((resolve) => {
+        waiters.push(resolve);
+      });
+    },
+    close() {
+      rl.close();
+    },
+  };
+}
 
 export function isRawTtySupported() {
   return Boolean(
