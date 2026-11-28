@@ -10,6 +10,7 @@ import { runFinish } from "../src/commands/finish.mjs";
 import { runHook } from "../src/commands/hook-cmd.mjs";
 import { runHooks } from "../src/commands/hooks-cmd.mjs";
 import { runInit } from "../src/commands/init.mjs";
+import { runIssue } from "../src/commands/issue.mjs";
 import { runNew } from "../src/commands/new.mjs";
 import { runPlanCheck } from "../src/commands/plan-check.mjs";
 import { runPolicy } from "../src/commands/policy-cmd.mjs";
@@ -36,6 +37,7 @@ Commands:
   status        Show workflow mode, branch/worktree state, active features, and next step
   worktree      Create a typed task branch in a dedicated Git worktree
   finish        Merge/push a verified task branch and clean up its worktree
+  issue         GitHub Issues closed-loop CLI (create | list | view | claim | review | release | labels:sync)
   cleanup       Remove clean worktrees and local task branches already merged into base
   pr-cleanup    Sync base branch and clean up local worktree/branch after a GitHub PR merge
   plan-check    Validate that the active feature record has complete, approved Plan Details
@@ -59,6 +61,8 @@ const commands = {
   status: runStatus,
   worktree: runWorktree,
   finish: runFinish,
+  issue: runIssue,
+  issues: runIssue,
   cleanup: runCleanup,
   "pr-cleanup": runPrCleanup,
   "plan-check": runPlanCheck,

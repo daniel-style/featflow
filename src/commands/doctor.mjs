@@ -52,7 +52,11 @@ export async function runDoctor(argv) {
   const add = (status, label, detail) => checks.push({ status, label, detail });
 
   add(commandExists("git") ? "PASS" : "FAIL", "Git CLI", commandExists("git") ? "available" : "git not found");
-  add(commandExists("gh") ? "PASS" : "INFO", "GitHub CLI (gh)", commandExists("gh") ? "available (for pr-cleanup)" : "optional — needed only for pr-cleanup");
+  add(
+    commandExists("gh") ? "PASS" : "INFO",
+    "GitHub CLI (gh)",
+    commandExists("gh") ? "available (for issue & pr-cleanup)" : "optional — needed only for issue & pr-cleanup",
+  );
 
   const repoRoot = findRepoRoot(process.cwd());
   if (!repoRoot) {
@@ -130,9 +134,18 @@ export async function runDoctor(argv) {
     }
   }
 
+  const hasIssuesSkill = existsSync(path.join(repoRoot, ".agents", "skills", "featflow-issues", "SKILL.md"));
+  if (config.issues) {
+    const assetsDetail = config.issues.assetsRepo ? `, assetsRepo=${config.issues.assetsRepo}` : "";
+    add("PASS", "Issues workflow", `enabled (${config.issues.provider}${assetsDetail})`);
+  }
+
   const syncGroups = new Set();
   if (hasRepoSkill) {
     syncGroups.add("skill");
+  }
+  if (hasIssuesSkill || (Boolean(config.issues) && (hasRepoSkill || hasRepoTemplates))) {
+    syncGroups.add("issues-skill");
   }
   if (hasRepoTemplates) {
     syncGroups.add("templates");

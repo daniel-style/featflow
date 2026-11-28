@@ -5,3 +5,4 @@ export * from "./policy.mjs";
 export * from "./hooks-core.mjs";
 export * from "./detect.mjs";
 export * from "./agent-docs.mjs";
+export * from "./issues.mjs";

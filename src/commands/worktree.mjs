@@ -1,10 +1,12 @@
-import { mkdirSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { existsSync, mkdirSync } from "node:fs";
 import path from "node:path";
 
 import { loadConfig, resolveWorktreeParent } from "../config.mjs";
 import {
   fail,
   findWorktreeForBranch,
+  formatCommand,
   gitConfigGet,
   gitWorktrees,
   localBranchExists,
@@ -102,55 +104,102 @@ function parseArgs(argv) {
   return options;
 }
 
-export async function runWorktree(argv) {
-  const options = parseArgs(argv);
-  const { config, repoRoot } = loadConfig(process.cwd());
+function runCapturedWrite(command, args, cwd, options = {}) {
+  if (options.dryRun) {
+    return;
+  }
+  const result = spawnSync(command, args, {
+    cwd,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+    shell: options.shell ?? false,
+    env: options.env ? { ...process.env, ...options.env } : process.env,
+  });
+  if (result.error) {
+    throw new Error(`${formatCommand(command, args)} failed: ${result.error.message}`);
+  }
+  if (result.status !== 0) {
+    const detail = (result.stderr || result.stdout || `exit code ${String(result.status)}`).trim();
+    throw new Error(`${formatCommand(command, args)} failed:\n${detail}`);
+  }
+}
 
-  try {
-    validateTaskBranchName(options.branch, repoRoot, new Set(config.protectedBranches));
-  } catch (error) {
-    fail(error instanceof Error ? error.message : String(error));
+export function preflightTaskWorktree(repoRoot, config, options = {}) {
+  const branch = String(options.branch ?? "").trim();
+  if (!branch) {
+    throw new Error("Missing branch name.");
   }
 
-  let baseRef = options.base;
+  validateTaskBranchName(branch, repoRoot, new Set(config.protectedBranches));
+
+  let baseRef = options.base || "";
   if (!options.baseProvided) {
     if (config.mode === "developer-branch") {
       baseRef = gitConfigGet(config.developerBranchConfigKey, repoRoot);
       if (!baseRef) {
-        fail(setupInstructions(config));
+        throw new Error(setupInstructions(config));
       }
     } else {
       baseRef = config.baseBranch;
     }
   }
 
-  const existingWorktree = findWorktreeForBranch(gitWorktrees(repoRoot), options.branch);
+  const existingWorktree = findWorktreeForBranch(gitWorktrees(repoRoot), branch);
   if (existingWorktree) {
-    fail(`Branch "${options.branch}" is already checked out in worktree: ${existingWorktree.path}`);
+    throw new Error(`Branch "${branch}" is already checked out in worktree: ${existingWorktree.path}`);
   }
 
   const worktreeParent = resolveWorktreeParent(repoRoot, config);
   const worktreePath = path.resolve(
-    options.path || path.join(worktreeParent, sanitizeBranchForDir(options.branch)),
+    options.path || path.join(worktreeParent, sanitizeBranchForDir(branch)),
   );
-  const branchExists = localBranchExists(options.branch, repoRoot);
-
-  if (!options.dryRun) {
-    mkdirSync(path.dirname(worktreePath), { recursive: true });
+  if (existsSync(worktreePath)) {
+    throw new Error(`Target worktree path already exists: ${worktreePath}`);
   }
 
-  const addArgs = branchExists
-    ? ["worktree", "add", worktreePath, options.branch]
-    : ["worktree", "add", "-b", options.branch, worktreePath, baseRef];
+  const branchExists = localBranchExists(branch, repoRoot);
+  return { branch, baseRef, worktreePath, branchExists };
+}
 
-  runWrite("git", addArgs, repoRoot, { dryRun: options.dryRun });
+export function createTaskWorktree(repoRoot, config, options = {}, preflighted = null) {
+  const plan = preflighted ?? preflightTaskWorktree(repoRoot, config, options);
+  const execWrite = options.captureOutput ? runCapturedWrite : runWrite;
+
+  if (!options.dryRun) {
+    mkdirSync(path.dirname(plan.worktreePath), { recursive: true });
+  }
+
+  const addArgs = plan.branchExists
+    ? ["worktree", "add", plan.worktreePath, plan.branch]
+    : ["worktree", "add", "-b", plan.branch, plan.worktreePath, plan.baseRef];
+
+  execWrite("git", addArgs, repoRoot, { dryRun: options.dryRun });
 
   if (!options.skipPostCreate && config.postWorktreeCreate.length > 0) {
     for (const cmd of config.postWorktreeCreate) {
-      runWrite(cmd, [], worktreePath, { dryRun: options.dryRun, shell: true });
+      execWrite(cmd, [], plan.worktreePath, { dryRun: options.dryRun, shell: true });
     }
   }
 
-  console.log(`Worktree ready: ${worktreePath}`);
-  console.log(`Branch: ${options.branch} (base: ${branchExists ? "existing" : baseRef})`);
+  return {
+    branch: plan.branch,
+    baseRef: plan.branchExists ? "existing" : plan.baseRef,
+    worktreePath: plan.worktreePath,
+    branchExists: plan.branchExists,
+  };
+}
+
+export async function runWorktree(argv) {
+  const options = parseArgs(argv);
+  const { config, repoRoot } = loadConfig(process.cwd());
+
+  let result;
+  try {
+    result = createTaskWorktree(repoRoot, config, options);
+  } catch (error) {
+    fail(error instanceof Error ? error.message : String(error));
+  }
+
+  console.log(`Worktree ready: ${result.worktreePath}`);
+  console.log(`Branch: ${result.branch} (base: ${result.baseRef})`);
 }

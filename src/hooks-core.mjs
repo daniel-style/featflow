@@ -251,6 +251,17 @@ export function evaluateUserPrompt(config, payload) {
     );
   }
 
+  if (
+    config.issues &&
+    /\b(?:issues?|claim|triage)\b|#\d+|提单|提个单|提个\s*bug|提个需求|提个\s*feat|记个单|记一下.*bug|拉单|看单|认领|工单/.test(
+      lower,
+    )
+  ) {
+    reminders.push(
+      "For GitHub Issues (filing with prefixes/screenshots or claiming & reviewing), follow `.agents/skills/featflow-issues/SKILL.md` and use `featflow issue create|list|view|claim|review|release` (do not create an Issue for plain direct fix requests).",
+    );
+  }
+
   if (reminders.length === 0) {
     return { additionalContext: "" };
   }

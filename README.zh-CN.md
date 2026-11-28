@@ -124,6 +124,7 @@ main (发布分支，受保护)
 | `featflow status` | 查看当前模式、分支状态、所有 worktree、进行中/暂停中的 feature 记录和下一步建议。 |
 | `featflow worktree <branch>` | 为任务分支创建独立 worktree，并自动执行 `.featflow.json` 中配置的 `postWorktreeCreate` 命令。 |
 | `featflow finish <branch>` | 完成并收尾任务分支（合并/推送、自动切出待删 worktree、移除干净 worktree 与本地分支）。支持 `--no-push`、`--pr`、`--dry-run`、`--keep-worktree`、`--keep-branch`。 |
+| `featflow issue <subcommand>` | 可选的 GitHub Issues 闭环 CLI（`create` / `list` / `view` / `claim` / `review` / `release` / `labels:sync`，仅在调用时依赖 `gh`）。认领前先预检本地 worktree 再改远端状态，支持通过 `.featflow.json` 的 `issues.assetsRepo` 托管截图，并可通过 `featflow init --with-issues` / `featflow sync` 同步可选 `featflow-issues` Skill。 |
 | `featflow cleanup` | 清理已合入目标分支且工作区干净的本地任务分支与 worktree（也挂在 `post-merge` 钩子自动执行）。 |
 | `featflow pr-cleanup <pr>` | GitHub PR 合并后（依赖 `gh` CLI）同步目标基线分支、删除干净 worktree 与本地/远端分支并 prune。 |
 | `featflow plan-check [path]` | 校验当前 active feature 记录的 `Plan Details` 章节完整度、占位符清理与审批状态。 |

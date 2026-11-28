@@ -19,6 +19,18 @@ export const DEFAULT_PREFIXES = [
 
 export const DEFAULT_PRODUCT_PATHS = ["src/", "apps/", "services/", "packages/", "lib/"];
 
+export const DEFAULT_ISSUES_CONFIG = {
+  provider: "github",
+  repo: null,
+  assetsRepo: null,
+  assetsBranch: "main",
+  assetsPrefix: "assets",
+  inProgressLabel: "status:in-progress",
+  inReviewLabel: "status:in-review",
+  blockedLabel: "status:blocked",
+  autoWorktree: true,
+};
+
 export const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 export function presetConfig(mode = "trunk") {
@@ -85,6 +97,44 @@ function isPlainObject(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
+export function normalizeIssuesConfig(rawIssues) {
+  if (!isPlainObject(rawIssues)) {
+    return null;
+  }
+  const provider =
+    typeof rawIssues.provider === "string" && rawIssues.provider.trim()
+      ? rawIssues.provider.trim().toLowerCase()
+      : DEFAULT_ISSUES_CONFIG.provider;
+  if (provider !== "github") {
+    throw new Error(`Unsupported issues.provider "${provider}". Expected "github".`);
+  }
+  const cleanStr = (val, fallback = null) => {
+    if (typeof val === "string" && val.trim()) {
+      return val.trim();
+    }
+    return fallback;
+  };
+  const prefix = cleanStr(rawIssues.assetsPrefix, DEFAULT_ISSUES_CONFIG.assetsPrefix).replace(/^\/+|\/+$/g, "") || "assets";
+  return {
+    provider,
+    repo: cleanStr(rawIssues.repo, null),
+    assetsRepo: cleanStr(rawIssues.assetsRepo, null),
+    assetsBranch: cleanStr(rawIssues.assetsBranch, DEFAULT_ISSUES_CONFIG.assetsBranch),
+    assetsPrefix: prefix,
+    inProgressLabel: cleanStr(rawIssues.inProgressLabel, DEFAULT_ISSUES_CONFIG.inProgressLabel),
+    inReviewLabel: cleanStr(rawIssues.inReviewLabel, DEFAULT_ISSUES_CONFIG.inReviewLabel),
+    blockedLabel: cleanStr(rawIssues.blockedLabel, DEFAULT_ISSUES_CONFIG.blockedLabel),
+    autoWorktree: rawIssues.autoWorktree !== false,
+  };
+}
+
+export function resolveIssuesConfig(config) {
+  if (config && isPlainObject(config.issues)) {
+    return normalizeIssuesConfig(config.issues);
+  }
+  return { ...DEFAULT_ISSUES_CONFIG };
+}
+
 export function resolveWorktreeParent(repoRoot, config) {
   const mainRoot = findMainRepoRoot(repoRoot) ?? repoRoot;
   if (config.worktreeParent) {
@@ -131,6 +181,7 @@ export function loadConfig(startCwd = process.cwd()) {
     ...base,
     ...raw,
     dangerousCommands,
+    issues: normalizeIssuesConfig(raw.issues),
     protectedBranches: Array.isArray(raw.protectedBranches)
       ? raw.protectedBranches.filter((item) => typeof item === "string" && item.trim().length > 0)
       : base.protectedBranches,

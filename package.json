@@ -1,7 +1,7 @@
 {
   "name": "featflow",
-  "version": "0.3.1",
-  "description": "AI-native feature workflow: Skill + CLI + Git/Agent Hooks for discovery-first planning, Git worktree isolation, and safe branch lifecycles.",
+  "version": "0.4.0",
+  "description": "AI-native feature workflow: Skill + CLI + Git/Agent Hooks for discovery-first planning, Git worktree isolation, GitHub Issues closed loop, and safe branch lifecycles.",
   "type": "module",
   "license": "MIT",
   "author": "Daniel",
@@ -37,7 +37,8 @@
     "./git": "./src/git.mjs",
     "./plan": "./src/plan.mjs",
     "./policy": "./src/policy.mjs",
-    "./hooks": "./src/hooks-core.mjs"
+    "./hooks": "./src/hooks-core.mjs",
+    "./issues": "./src/issues.mjs"
   },
   "files": [
     "bin/",

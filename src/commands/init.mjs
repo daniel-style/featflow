@@ -2,7 +2,7 @@ import { chmodSync, copyFileSync, existsSync, mkdirSync, readFileSync, writeFile
 import path from "node:path";
 
 import { renderAgentWorkflowBlock, resolveAgentDocTargets, upsertAgentDocBlock } from "../agent-docs.mjs";
-import { CONFIG_FILENAME, packageRoot, presetConfig } from "../config.mjs";
+import { CONFIG_FILENAME, DEFAULT_ISSUES_CONFIG, packageRoot, presetConfig } from "../config.mjs";
 import { applyDetectedConfig, detectRepoEnvironment } from "../detect.mjs";
 import { fail, findRepoRoot } from "../git.mjs";
 import { configureGitHooksSafely, installLocalHooks } from "./hooks-cmd.mjs";
@@ -32,6 +32,8 @@ Options:
   --no-hooks                       Skip Git hook installation.
   --with-codex-hooks               Install or merge Codex hook configuration (.codex/config.toml).
   --with-claude-hooks              Install or merge Claude Code hook configuration (.claude/settings.json).
+  --with-issues                    Enable optional GitHub Issues closed-loop config & featflow-issues Skill.
+  --issue-assets-repo <o/r>        Configure issues.assetsRepo for screenshot uploads (implies --with-issues).
   --agent-docs <files>             Comma-separated agent doc files to update (e.g. AGENTS.md,CLAUDE.md).
   --no-agent-docs                  Skip injecting the managed workflow block into AGENTS.md / CLAUDE.md.
   --no-detect                      Skip automatic branch, productPaths, and verifyCommands detection.
@@ -60,6 +62,8 @@ function parseArgs(argv) {
     hooksExplicit: false,
     withCodexHooks: false,
     withClaudeHooks: false,
+    withIssues: false,
+    issueAssetsRepo: "",
     agentDocs: null,
     updateAgentDocs: true,
     detect: true,
@@ -144,6 +148,26 @@ function parseArgs(argv) {
     }
     if (arg === "--with-claude-hooks") {
       options.withClaudeHooks = true;
+      continue;
+    }
+    if (arg === "--with-issues") {
+      options.withIssues = true;
+      continue;
+    }
+    if (arg === "--issue-assets-repo") {
+      options.issueAssetsRepo = argv[++i] ?? "";
+      if (!options.issueAssetsRepo || !options.issueAssetsRepo.includes("/")) {
+        fail('Invalid value for --issue-assets-repo. Expected "<owner>/<repo>".', usage);
+      }
+      options.withIssues = true;
+      continue;
+    }
+    if (arg.startsWith("--issue-assets-repo=")) {
+      options.issueAssetsRepo = arg.slice("--issue-assets-repo=".length);
+      if (!options.issueAssetsRepo || !options.issueAssetsRepo.includes("/")) {
+        fail('Invalid value for --issue-assets-repo. Expected "<owner>/<repo>".', usage);
+      }
+      options.withIssues = true;
       continue;
     }
     if (arg === "--agent-docs") {
@@ -508,6 +532,12 @@ export async function runInit(argv) {
     if (options.trackPointer) {
       config.trackCurrentFeaturePointer = true;
     }
+    if (options.withIssues) {
+      config.issues = {
+        ...DEFAULT_ISSUES_CONFIG,
+        assetsRepo: options.issueAssetsRepo || null,
+      };
+    }
 
     // In --minimal mode, default to local .git/hooks/ unless --no-hooks or --with-githooks was chosen
     const shouldInstallLocalHooks =
@@ -571,6 +601,15 @@ export async function runInit(argv) {
         created,
         skipped,
       );
+      if (options.withIssues) {
+        copyTemplateFile(
+          path.join(packageRoot, "skills", "featflow-issues", "SKILL.md"),
+          path.join(repoRoot, ".agents", "skills", "featflow-issues", "SKILL.md"),
+          options.force,
+          created,
+          skipped,
+        );
+      }
     }
 
     if (options.updateAgentDocs) {
